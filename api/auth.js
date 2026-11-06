@@ -39,6 +39,7 @@ const userSchema = new mongoose.Schema({
   _id: { type: Number, required: true },
   e: { type: String, required: true, unique: true, lowercase: true, trim: true },
   p: { type: String, required: true },
+  n: { type: String, unique: true, sparse: true, trim: true },
   c: { type: Number, default: nowSeconds },
   av: String
 }, { versionKey: false });
@@ -50,7 +51,8 @@ const pendingSchema = new mongoose.Schema({
   p: { type: String, required: true },
   o: { type: String, required: true },
   x: { type: Number, required: true },
-  a: { type: Number, default: 0 }
+  a: { type: Number, default: 0 },
+  n: String
 }, { versionKey: false });
 
 const Pending = mongoose.models.Pending || mongoose.model('Pending', pendingSchema, 'pending');
@@ -90,16 +92,56 @@ const friendSchema = new mongoose.Schema({
 
 const Friend = mongoose.models.Friend || mongoose.model('Friend', friendSchema, 'friends');
 
+const USERNAME_RE = /^[a-z0-9._]{3,20}$/;
+
+function baseUsername(email) {
+  const base = String(email || '')
+    .split('@')[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9._]/g, '')
+    .replace(/^[._]+|[._]+$/g, '')
+    .slice(0, 20);
+  return base.length >= 3 ? base : `user${base}`.slice(0, 20);
+}
+
+async function freeUsername(base) {
+  const root = base.slice(0, 20);
+  for (let i = 0; i < 20; i++) {
+    const suffix = i ? String(i) : '';
+    const name = root.slice(0, 20 - suffix.length) + suffix;
+    if (!(await User.exists({ n: name }))) return name;
+  }
+  return root.slice(0, 14) + crypto.randomBytes(3).toString('hex');
+}
+
+async function assignUsername(userId, email) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const name = await freeUsername(baseUsername(email));
+    try {
+      await User.updateOne({ _id: userId }, { n: name });
+      return name;
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+    }
+  }
+  return null;
+}
+
 async function createUser(fields) {
+  let username = fields.n || (await freeUsername(baseUsername(fields.e)));
   for (let attempt = 0; attempt < 5; attempt++) {
     const last = await User.findOne({ _id: { $type: 'number' } }).sort({ _id: -1 }).select('_id').lean();
     try {
-      const user = await User.create({ _id: (last ? last._id : 0) + 1, ...fields });
+      const user = await User.create({ _id: (last ? last._id : 0) + 1, ...fields, n: username });
       await Session.deleteMany({ u: user._id });
       return user;
     } catch (err) {
       if (err.code !== 11000) throw err;
       if (err.keyPattern && err.keyPattern.e) return null;
+      if (err.keyPattern && err.keyPattern.n) {
+        username = await freeUsername(baseUsername(fields.e));
+        continue;
+      }
     }
   }
   throw new Error('Could not allocate a user id. Please try again.');
@@ -211,12 +253,23 @@ function readAuth(req) {
   }
 }
 
-async function handleRegister(res, email, password) {
+async function handleRegister(res, email, password, username) {
   const key = normalizeEmail(email);
   await migrateLegacyPending(key);
 
   if (await User.exists({ e: key })) {
     return res.status(400).json({ error: 'Email already registered.' });
+  }
+
+  let name = null;
+  if (username) {
+    name = String(username).trim().replace(/^@/, '').toLowerCase();
+    if (!USERNAME_RE.test(name)) {
+      return res.status(400).json({ error: 'Usernames are 3–20 characters: a–z, 0–9, dots and underscores.' });
+    }
+    if (await User.exists({ n: name })) {
+      return res.status(409).json({ error: 'That username is taken.' });
+    }
   }
 
   const now = nowSeconds();
@@ -241,7 +294,7 @@ async function handleRegister(res, email, password) {
   await Pending.deleteMany({ x: { $lt: now - 3600 } });
   await Pending.updateOne(
     { _id: key },
-    { p, o, x: now + OTP_TTL_SECONDS, a: 0 },
+    { p, o, x: now + OTP_TTL_SECONDS, a: 0, ...(name ? { n: name } : {}) },
     { upsert: true }
   );
 
@@ -268,7 +321,7 @@ async function handleVerify(req, res, email, otp) {
     return res.status(400).json({ error: 'Incorrect code.' });
   }
 
-  const user = await createUser({ e: key, p: pending.p });
+  const user = await createUser({ e: key, p: pending.p, ...(pending.n ? { n: pending.n } : {}) });
   if (!user) {
     await Pending.deleteOne({ _id: key });
     return res.status(409).json({ error: 'Email already registered — please log in.' });
@@ -296,11 +349,18 @@ async function handleSessions(req, res) {
 
   await Session.updateOne({ _id: auth.sid }, { s: nowSeconds() });
 
-  const user = await User.findById(auth.userId).select('e av').lean();
+  const user = await User.findById(auth.userId).select('e n av').lean();
   if (!user) return res.status(401).json({ error: 'Account not found.', expired: true });
+
+  let username = user.n;
+  if (!username) {
+    username = await assignUsername(user._id, user.e);
+    if (!username) username = baseUsername(user.e);
+  }
 
   return res.status(200).json({
     email: user.e,
+    username,
     avatar: user.av || null,
     sessions: sessions.map((s) => ({
       id: s._id,
@@ -364,7 +424,7 @@ async function handleFriends(req, res) {
 
   const docs = await Friend.find({ $or: [{ a: auth.userId }, { b: auth.userId }] }).lean();
   const otherIds = docs.map((f) => (f.a === auth.userId ? f.b : f.a));
-  const users = otherIds.length ? await User.find({ _id: { $in: otherIds } }).select('e av').lean() : [];
+  const users = otherIds.length ? await User.find({ _id: { $in: otherIds } }).select('e n av').lean() : [];
   const byId = new Map(users.map((u) => [u._id, u]));
 
   const friends = [];
@@ -374,11 +434,11 @@ async function handleFriends(req, res) {
     const other = f.a === auth.userId ? f.b : f.a;
     const u = byId.get(other);
     if (!u) continue;
-    const item = { id: other, email: u.e, avatar: u.av || null };
+    const item = { id: other, email: u.e, username: u.n || null, avatar: u.av || null };
     if (f.s === 'a') friends.push(item);
     else if (f.s === 'p') (f.r === auth.userId ? outgoing : incoming).push({ ...item, t: f.t });
   }
-  friends.sort((x, y) => x.email.localeCompare(y.email));
+  friends.sort((x, y) => (x.username || x.email).localeCompare(y.username || y.email));
   incoming.sort((x, y) => y.t - x.t);
   outgoing.sort((x, y) => y.t - x.t);
 
@@ -389,12 +449,21 @@ async function handleFriendRequest(req, res, email) {
   const auth = await requireLiveSession(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
 
-  const key = normalizeEmail(email);
-  if (!key) return res.status(400).json({ error: 'Enter their email.' });
+  const raw = String(email || '').trim();
+  if (!raw) return res.status(400).json({ error: 'Enter their email or username.' });
 
-  const target = await User.findOne({ e: key }).select('_id').lean();
-  if (!target) return res.status(404).json({ error: 'No account with that email.' });
-  if (target._id === auth.userId) return res.status(400).json({ error: 'That is your own email.' });
+  let target;
+  if (!raw.startsWith('@') && raw.includes('@')) {
+    target = await User.findOne({ e: normalizeEmail(raw) }).select('_id').lean();
+  } else {
+    const name = raw.replace(/^@/, '').toLowerCase();
+    if (!USERNAME_RE.test(name)) {
+      return res.status(400).json({ error: 'Enter a valid email or username.' });
+    }
+    target = await User.findOne({ n: name }).select('_id').lean();
+  }
+  if (!target) return res.status(404).json({ error: 'No account found.' });
+  if (target._id === auth.userId) return res.status(400).json({ error: 'That is your own account.' });
 
   const id = pairKey(auth.userId, target._id);
   const now = nowSeconds();
@@ -456,6 +525,27 @@ async function handleFriendRemove(req, res, id) {
   return res.status(200).json({ ok: true });
 }
 
+async function handleUsername(req, res, raw) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const name = String(raw || '').trim().replace(/^@/, '').toLowerCase();
+  if (!USERNAME_RE.test(name)) {
+    return res.status(400).json({ error: 'Usernames are 3–20 characters: a–z, 0–9, dots and underscores.' });
+  }
+
+  const taken = await User.exists({ n: name, _id: { $ne: auth.userId } });
+  if (taken) return res.status(409).json({ error: 'That username is taken.' });
+
+  try {
+    await User.updateOne({ _id: auth.userId }, { n: name });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: 'That username is taken.' });
+    throw err;
+  }
+  return res.status(200).json({ username: name });
+}
+
 async function handleRevoke(req, res, id) {
   const auth = readAuth(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
@@ -478,11 +568,11 @@ module.exports = async function handler(req, res) {
     }
 
     await connectDB();
-    const { action, email, password, otp, id, image, accept } = body;
+    const { action, email, password, otp, id, image, accept, username } = body;
 
     if (action === 'register') {
       if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
-      return await handleRegister(res, email, password);
+      return await handleRegister(res, email, password, username);
     }
 
     if (action === 'verify') {
@@ -523,6 +613,7 @@ module.exports = async function handler(req, res) {
     if (action === 'request') return await handleFriendRequest(req, res, email);
     if (action === 'respond') return await handleFriendRespond(req, res, id, !!accept);
     if (action === 'remove') return await handleFriendRemove(req, res, id);
+    if (action === 'username') return await handleUsername(req, res, username);
 
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {

@@ -36,8 +36,19 @@
         #msg { color: #ff6b6b; text-align: center; font-size: 13px; margin: 8px 0 0; min-height: 18px; }
 
         .dash-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; padding-right: 86px; }
-        .dash-head h2 { margin: 0 0 2px; font-size: 17px; }
-        .dash-head #who { margin: 0; text-align: left; color: #8b8b96; font-size: 12.5px; word-break: break-all; }
+        .dash-me { min-width: 0; }
+        .nameline { display: flex; align-items: center; gap: 6px; }
+        #uname { font-size: 17px; font-weight: 600; letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .link { width: auto; margin: 0; padding: 2px 6px; background: none; color: #8b8b96; font-size: 11px; font-weight: 600; border-radius: 6px; }
+        .link:hover { background: #24242b; color: #c9c9d4; }
+        .dash-head #who { margin: 1px 0 0; text-align: left; color: #8b8b96; font-size: 12.5px; word-break: break-all; }
+        #uname-form { display: flex; gap: 8px; margin: 10px 0 0; }
+        #uname-form input { flex: 1; min-width: 0; margin: 0; }
+        #uname-form button { width: auto; margin: 0; padding: 0 12px; font-size: 12.5px; }
+        #uname-form button.ghost { background: #24242b; color: #c9c9d4; font-weight: 500; }
+        #uname-form button.ghost:hover { background: #2f2f38; }
+        #uname-msg { color: #ff6b6b; text-align: left; font-size: 12px; margin: 6px 0 0; min-height: 16px; }
+        #uname-msg.ok { color: #3ba55d; }
         .avatar { position: relative; width: 64px; height: 64px; margin: 0; padding: 0; flex: 0 0 auto; border-radius: 50%; overflow: hidden; border: 2px solid #2b2b33; background: linear-gradient(135deg, #6366f1, #8b5cf6); font-size: 24px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
         .avatar:hover { border-color: #4d4d5a; }
         .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -111,6 +122,7 @@
         <h2 id="title">Login</h2>
         <form id="form">
             <input type="email" id="email" placeholder="Email" autocomplete="email" required>
+            <input type="text" id="username" class="hidden" placeholder="Username (optional)" maxlength="20" autocomplete="off" spellcheck="false">
             <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
             <button type="submit" id="btn">Login</button>
         </form>
@@ -131,11 +143,20 @@
                 <span id="avatar-initial">?</span>
                 <span class="edit">Edit</span>
             </button>
-            <div>
-                <h2>Logged in</h2>
+            <div class="dash-me">
+                <div class="nameline">
+                    <strong id="uname">@</strong>
+                    <button type="button" class="link" id="uname-edit">Edit</button>
+                </div>
                 <p id="who"></p>
             </div>
         </div>
+        <form id="uname-form" class="hidden">
+            <input id="uname-input" maxlength="20" placeholder="username" autocomplete="username" spellcheck="false" required>
+            <button type="submit">Save</button>
+            <button type="button" class="ghost" id="uname-cancel">Cancel</button>
+        </form>
+        <p id="uname-msg"></p>
         <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="file-input">
         <h3>Active logins</h3>
         <div id="sessions"></div>
@@ -149,9 +170,9 @@
         <div id="f-pane-all"></div>
         <div id="f-pane-pending" class="hidden"></div>
         <div id="f-pane-add" class="hidden">
-            <p class="fhint">You can add friends with their email — it's that simple.</p>
+            <p class="fhint">You can add friends with their email or @username — it's that simple.</p>
             <form id="friend-form">
-                <input type="email" id="friend-email" placeholder="Enter email" autocomplete="email" required>
+                <input type="text" id="friend-who" placeholder="Email or @username" autocomplete="off" spellcheck="false" required>
                 <button type="submit" id="friend-add">Send request</button>
             </form>
         </div>
@@ -201,11 +222,25 @@
             return `${Math.floor(d / 86400)}d ago`;
         }
 
-        function setWho(email) {
+        function setIdent(email, username) {
             if (email) localStorage.setItem('email', email);
-            const e = localStorage.getItem('email') || '';
+            if (username) localStorage.setItem('username', username);
+            const e = email || localStorage.getItem('email') || '';
+            const n = username || localStorage.getItem('username') || '';
             $('who').textContent = e;
-            $('avatar-initial').textContent = (e[0] || '?').toUpperCase();
+            $('uname').textContent = n ? '@' + n : '@';
+            $('avatar-initial').textContent = ((n || e)[0] || '?').toUpperCase();
+        }
+
+        function unameMsg(text, ok) {
+            const el = $('uname-msg');
+            el.textContent = text || '';
+            el.classList.toggle('ok', !!ok);
+        }
+
+        function closeUname() {
+            $('uname-form').classList.add('hidden');
+            $('uname-edit').classList.remove('hidden');
         }
 
         function setAvatar(url) {
@@ -226,7 +261,7 @@
         function showDash() {
             $('auth-card').classList.add('hidden');
             $('dash').classList.remove('hidden');
-            setWho();
+            setIdent();
             setAvatar(null);
             loadSessions();
             loadFriends();
@@ -287,7 +322,7 @@
                 $('sessions').textContent = out.data.error || 'Could not load devices.';
                 return;
             }
-            if (out.data.email) setWho(out.data.email);
+            if (out.data.email) setIdent(out.data.email, out.data.username);
             setAvatar(out.data.avatar);
             renderSessions(out.data.sessions);
         }
@@ -304,6 +339,40 @@
             if (out.data.current) return clearAuth();
             loadSessions();
         }
+
+        $('uname-edit').onclick = () => {
+            $('uname-input').value = ($('uname').textContent || '').replace(/^@/, '');
+            $('uname-form').classList.remove('hidden');
+            $('uname-edit').classList.add('hidden');
+            unameMsg('');
+            $('uname-input').focus();
+            $('uname-input').select();
+        };
+
+        $('uname-cancel').onclick = () => {
+            closeUname();
+            unameMsg('');
+        };
+
+        $('uname-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const username = $('uname-input').value.trim();
+            if (!username) return unameMsg('Enter a username.');
+
+            let out;
+            try {
+                out = await post({ action: 'username', username }, localStorage.getItem('token'));
+            } catch {
+                return unameMsg('Network error — try again.');
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) return unameMsg(out.data.error || 'Could not change your username.');
+
+            setIdent(localStorage.getItem('email'), out.data.username);
+            closeUname();
+            unameMsg('Username updated.', true);
+            loadFriends();
+        };
 
         let friendData = { friends: [], incoming: [], outgoing: [] };
         let friendTab = 'all';
@@ -374,7 +443,7 @@
             const av = document.createElement('div');
             av.className = 'fava';
             const initial = document.createElement('span');
-            initial.textContent = (u.email[0] || '?').toUpperCase();
+            initial.textContent = ((u.username || u.email)[0] || '?').toUpperCase();
             av.append(initial);
             if (u.avatar) {
                 const img = document.createElement('img');
@@ -390,7 +459,8 @@
             const info = document.createElement('div');
             info.className = 'finfo';
             const name = document.createElement('strong');
-            name.textContent = u.email;
+            name.textContent = u.username ? '@' + u.username : u.email;
+            if (u.username) name.title = u.email;
             const note = document.createElement('span');
             note.textContent = status;
             info.append(name, note);
@@ -656,7 +726,12 @@
         async function sendCode() {
             let out;
             try {
-                out = await post({ action: 'register', email: pending.email, password: pending.password });
+                out = await post({
+                    action: 'register',
+                    email: pending.email,
+                    password: pending.password,
+                    ...(pending.username ? { username: pending.username } : {})
+                });
             } catch {
                 return $('msg').textContent = 'Network error — could not reach the server.';
             }
@@ -670,6 +745,7 @@
             $('title').textContent = isLogin ? 'Login' : 'Register';
             $('btn').textContent = isLogin ? 'Login' : 'Register';
             $('toggle').textContent = isLogin ? 'Need an account? Register' : 'Already have an account? Login';
+            $('username').classList.toggle('hidden', isLogin);
             $('msg').textContent = '';
         };
 
@@ -677,11 +753,12 @@
             e.preventDefault();
             const email = $('email').value;
             const password = $('password').value;
-            pending = { email, password };
+            const username = isLogin ? '' : $('username').value.trim();
+            pending = { email, password, username };
 
             let out;
             try {
-                out = await post({ action: isLogin ? 'login' : 'register', email, password });
+                out = await post({ action: isLogin ? 'login' : 'register', email, password, ...(username ? { username } : {}) });
             } catch {
                 return $('msg').textContent = 'Network error — could not reach the server.';
             }
@@ -718,20 +795,20 @@
 
         $('friend-form').onsubmit = async (e) => {
             e.preventDefault();
-            const email = $('friend-email').value.trim();
-            if (!email) return;
+            const who = $('friend-who').value.trim();
+            if (!who) return;
             friendMsg('');
 
             let out;
             try {
-                out = await post({ action: 'request', email }, localStorage.getItem('token'));
+                out = await post({ action: 'request', email: who }, localStorage.getItem('token'));
             } catch {
                 return friendMsg('Network error — try again.');
             }
             if (out.res.status === 401) return clearAuth();
             if (!out.res.ok) return friendMsg(out.data.error || 'Could not send the request.');
 
-            $('friend-email').value = '';
+            $('friend-who').value = '';
             setFriendTab('pending');
             friendMsg('Friend request sent.', true);
             loadFriends();
