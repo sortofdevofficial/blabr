@@ -2,11 +2,28 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-let cachedDb = null;
+mongoose.set('bufferCommands', false);
+
+const db = globalThis.__pratrDb || (globalThis.__pratrDb = { conn: null, promise: null });
+
+function dbHint(err) {
+  const uri = process.env.MONGO_URI;
+  if (!uri) return 'MONGO_URI is not set. Add it in Vercel → Project Settings → Environment Variables, then redeploy.';
+  if (/@(localhost|127\.0\.0\.1)/.test(uri)) return 'MONGO_URI points to localhost. Use the MongoDB Atlas connection string instead.';
+  if (/bad auth|Authentication failed/i.test(err.message)) return 'Atlas rejected the credentials. Check the user/password in MONGO_URI (URL-encode special characters).';
+  if (/server selection|timed out|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i.test(err.message)) return 'Could not reach the cluster. In MongoDB Atlas → Network Access, allow 0.0.0.0/0 so Vercel can connect. Also check the cluster is not paused.';
+  return null;
+}
+
 async function connectDB() {
-  if (cachedDb) return cachedDb;
-  cachedDb = await mongoose.connect(process.env.MONGO_URI);
-  return cachedDb;
+  if (db.conn) return db.conn;
+  if (!db.promise) {
+    db.promise = mongoose
+      .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000 })
+      .then((m) => { db.conn = m; return m; })
+      .catch((err) => { db.promise = null; throw err; });
+  }
+  return db.promise;
 }
 
 const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema({
@@ -17,8 +34,13 @@ const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema(
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
+    let body = req.body || {};
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON body.' }); }
+    }
+
     await connectDB();
-    const { action, email, password } = req.body;
+    const { action, email, password } = body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
 
     if (action === 'register') {
@@ -38,6 +60,8 @@ module.exports = async function handler(req, res) {
     }
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[auth]', err);
+    const hint = dbHint(err);
+    res.status(500).json({ error: err.message, ...(hint ? { hint } : {}) });
   }
 };

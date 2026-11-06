@@ -39,13 +39,18 @@
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const res = await fetch('/api/auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: isLogin ? 'login' : 'register', email, password })
-            });
-            const data = await res.json();
-            if (!res.ok) return document.getElementById('msg').textContent = data.error;
+            let res, data;
+            try {
+                res = await fetch('/api/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: isLogin ? 'login' : 'register', email, password })
+                });
+                data = await res.json().catch(() => ({}));
+            } catch {
+                return document.getElementById('msg').textContent = 'Network error — could not reach the server.';
+            }
+            if (!res.ok) return document.getElementById('msg').textContent = data.hint || data.error || `Request failed (${res.status})`;
             if (isLogin) {
                 localStorage.setItem('token', data.token);
                 document.getElementById('auth-card').classList.add('hidden');
