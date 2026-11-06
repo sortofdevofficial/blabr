@@ -26,10 +26,24 @@ async function connectDB() {
   return db.promise;
 }
 
-const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema({
-  email: { type: String, required: true, unique: true, lowercase: true },
-  password: { type: String, required: true }
-}));
+const Counter = mongoose.models.Counter || mongoose.model('Counter', new mongoose.Schema({
+  _id: String,
+  seq: { type: Number, default: 0 }
+}, { versionKey: false }));
+
+const userSchema = new mongoose.Schema({
+  _id: { type: Number, required: true },
+  e: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  p: { type: String, required: true },
+  c: { type: Number, default: () => Math.floor(Date.now() / 1000) }
+}, { versionKey: false });
+
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+
+async function nextUserId() {
+  const counter = await Counter.findByIdAndUpdate('user', { $inc: { seq: 1 } }, { new: true, upsert: true });
+  return counter.seq;
+}
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -44,22 +58,22 @@ module.exports = async function handler(req, res) {
     if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
 
     if (action === 'register') {
-      if (await User.findOne({ email })) return res.status(400).json({ error: 'Email already registered.' });
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await User.create({ email, password: hashedPassword });
+      if (await User.findOne({ e: email })) return res.status(400).json({ error: 'Email already registered.' });
+      const p = await bcrypt.hash(password, 10);
+      await User.create({ i: await nextUserId(), e: email, p });
       return res.status(201).json({ message: 'Account created!' });
     }
 
     if (action === 'login') {
-      const user = await User.findOne({ email });
-      if (!user || !(await bcrypt.compare(password, user.password))) {
+      const user = await User.findOne({ e: email });
+      if (!user || !(await bcrypt.compare(password, user.p))) {
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
       if (!process.env.JWT_SECRET) {
         return res.status(500).json({ error: 'JWT_SECRET is not set. Add it in Vercel → Project Settings → Environment Variables, then redeploy.' });
       }
-      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-      return res.status(200).json({ token, email: user.email });
+      const token = jwt.sign({ userId: user.i }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      return res.status(200).json({ token, email: user.e, id: user.i });
     }
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {
