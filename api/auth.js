@@ -38,7 +38,8 @@ async function connectDB() {
     db.promise = mongoose
       .connect(process.env.MONGO_URI, {
         serverSelectionTimeoutMS: 8000,
-        maxPoolSize: 5,
+        maxPoolSize: 1,
+        minPoolSize: 0,
         maxIdleTimeMS: 60000
       })
       .then((m) => { db.conn = m; return m; })
@@ -437,6 +438,8 @@ const pairKey = (x, y) => (x < y ? `${x}:${y}` : `${y}:${x}`);
 async function handleFriends(req, res) {
   const auth = await requireLiveSession(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  await User.updateOne({ _id: auth.userId }, { o: nowSeconds() });
 
   const docs = await Friend.find({ $or: [{ a: auth.userId }, { b: auth.userId }] }).lean();
   const otherIds = docs.map((f) => (f.a === auth.userId ? f.b : f.a));

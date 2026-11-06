@@ -232,11 +232,10 @@
         let drag = null;
         const P = 320;
         const $ = (id) => document.getElementById(id);
-        const PING_EVERY = 60 * 1000;
+        const SYNC_EVERY = 60 * 1000;
         const PRESENCE_LABEL = { online: 'Online', idle: 'Idle', dnd: 'Do Not Disturb', offline: 'Offline' };
         const MY_STATUS = ['online', 'idle', 'dnd'];
         let myStatus = localStorage.getItem('status') || 'online';
-        let presenceTimer = null;
         let friendsTimer = null;
 
         function presenceClass(s) {
@@ -257,20 +256,10 @@
             });
         }
 
-        async function heartbeat() {
-            if (!localStorage.getItem('token')) return;
-            try {
-                await post({ action: 'ping' }, localStorage.getItem('token'));
-            } catch {}
-        }
-
         function startPresence() {
             setMyStatus(myStatus, true);
-            heartbeat();
-            clearInterval(presenceTimer);
-            presenceTimer = setInterval(heartbeat, PING_EVERY);
             clearInterval(friendsTimer);
-            friendsTimer = setInterval(() => loadFriends(true), PING_EVERY);
+            friendsTimer = setInterval(() => loadFriends(true), SYNC_EVERY);
         }
 
         function loggedIn(token, email) {
