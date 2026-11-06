@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Auth</title>
     <style>
         * { box-sizing: border-box; }
         body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; color: #f2f2f4; background: radial-gradient(1200px 600px at 50% -10%, #1b1b22 0%, #0e0e11 60%); }
-        .card { background: #17171b; padding: 26px; border-radius: 14px; width: 100%; max-width: 320px; flex: 0 0 auto; border: 1px solid #26262d; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
+        .card { background: #17171b; padding: 26px; border-radius: 16px; width: 100%; max-width: 320px; flex: 0 0 auto; border: 1px solid #26262d; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
+        #dash { max-width: 380px; }
         h2 { margin: 0 0 14px; font-size: 20px; letter-spacing: -.015em; }
         h3 { font-size: 11px; color: #8b8b96; margin: 20px 0 4px; text-transform: uppercase; letter-spacing: .08em; }
         input, button { width: 100%; padding: 11px 12px; margin: 8px 0; font: inherit; border-radius: 9px; }
@@ -16,6 +18,7 @@
         button { background: #6366f1; border: none; color: #fff; font-weight: 600; cursor: pointer; transition: background .15s, transform .06s; }
         button:hover { background: #5457e5; }
         button:active { transform: translateY(1px); }
+        button:disabled { opacity: .6; cursor: default; }
         .hidden { display: none; }
         #toggle, #resend, #otp-note { color: #8b8b96; text-align: center; font-size: 13px; }
         #toggle { cursor: pointer; margin: 10px 0 0; transition: color .15s; }
@@ -24,7 +27,16 @@
         #resend:hover { text-decoration: underline; }
         #otp-note { margin: 0 0 10px; }
         #msg { color: #ff6b6b; text-align: center; font-size: 13px; margin: 8px 0 0; min-height: 18px; }
-        #who { color: #8b8b96; font-size: 13px; text-align: center; margin: 0; }
+
+        .dash-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+        .dash-head h2 { margin: 0 0 2px; font-size: 17px; }
+        .dash-head #who { margin: 0; text-align: left; color: #8b8b96; font-size: 12.5px; word-break: break-all; }
+        .avatar { position: relative; width: 64px; height: 64px; margin: 0; padding: 0; flex: 0 0 auto; border-radius: 50%; overflow: hidden; border: 2px solid #2b2b33; background: linear-gradient(135deg, #6366f1, #8b5cf6); font-size: 24px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+        .avatar:hover { border-color: #4d4d5a; }
+        .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+        .avatar .edit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .55); color: #fff; font-size: 11px; font-weight: 500; opacity: 0; transition: opacity .15s; }
+        .avatar:hover .edit, .avatar:focus-visible .edit { opacity: 1; }
+
         .sess { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid #24242b; padding: 9px 0; }
         .sess:first-child { border-top: none; }
         .sess strong { display: block; font-size: 12.5px; font-weight: 600; }
@@ -34,6 +46,20 @@
         .sess button { width: auto; margin: 0; padding: 5px 9px; font-size: 11px; border-radius: 7px; }
         .sess button.ghost { background: #24242b; color: #c9c9d4; font-weight: 500; }
         .sess button.ghost:hover { background: #2f2f38; }
+
+        .modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .72); backdrop-filter: blur(2px); }
+        .modal-card { background: #17171b; border: 1px solid #2b2b33; border-radius: 16px; padding: 20px; width: 100%; max-width: 360px; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+        .modal-card h2 { margin: 0 0 14px; font-size: 17px; }
+        .crop-stage { display: flex; justify-content: center; margin-bottom: 12px; }
+        #crop-canvas { width: 100%; max-width: 280px; height: auto; display: block; border-radius: 12px; cursor: grab; touch-action: none; }
+        #crop-canvas:active { cursor: grabbing; }
+        #crop-zoom { padding: 0; margin: 0 0 12px; height: 22px; background: none; border: none; box-shadow: none; accent-color: #6366f1; cursor: pointer; }
+        #crop-zoom:focus { box-shadow: none; }
+        #crop-msg { color: #ff6b6b; text-align: center; font-size: 12.5px; margin: 0 0 10px; min-height: 16px; }
+        .modal-actions { display: flex; gap: 10px; }
+        .modal-actions button { margin: 0; }
+        .modal-actions .ghost { background: #24242b; color: #c9c9d4; }
+        .modal-actions .ghost:hover { background: #2f2f38; }
     </style>
 </head>
 <body>
@@ -54,15 +80,44 @@
         <p id="msg"></p>
     </div>
     <div class="card hidden" id="dash">
-        <h2>Logged In!</h2>
-        <p id="who"></p>
+        <div class="dash-head">
+            <button type="button" class="avatar" id="avatar-btn" title="Change profile photo">
+                <img id="avatar-img" alt="Profile photo" class="hidden">
+                <span id="avatar-initial">?</span>
+                <span class="edit">Edit</span>
+            </button>
+            <div>
+                <h2>Logged in</h2>
+                <p id="who"></p>
+            </div>
+        </div>
+        <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="hidden">
         <h3>Active logins</h3>
         <div id="sessions"></div>
         <button onclick="logout()">Logout</button>
     </div>
+
+    <div class="modal hidden" id="crop">
+        <div class="modal-card">
+            <h2>Change profile photo</h2>
+            <div class="crop-stage">
+                <canvas id="crop-canvas" width="320" height="320"></canvas>
+            </div>
+            <input type="range" id="crop-zoom" min="1" max="3" step="0.01" value="1">
+            <p id="crop-msg"></p>
+            <div class="modal-actions">
+                <button type="button" class="ghost" id="crop-cancel">Cancel</button>
+                <button type="button" id="crop-save">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let isLogin = true;
         let pending = null;
+        let crop = null;
+        let drag = null;
+        const P = 320;
         const $ = (id) => document.getElementById(id);
 
         function loggedIn(token, email) {
@@ -84,10 +139,31 @@
             return `${Math.floor(d / 86400)}d ago`;
         }
 
+        function setWho(email) {
+            if (email) localStorage.setItem('email', email);
+            const e = localStorage.getItem('email') || '';
+            $('who').textContent = e;
+            $('avatar-initial').textContent = (e[0] || '?').toUpperCase();
+        }
+
+        function setAvatar(url) {
+            const img = $('avatar-img');
+            if (url) {
+                img.src = url;
+                img.classList.remove('hidden');
+                $('avatar-initial').classList.add('hidden');
+            } else {
+                img.removeAttribute('src');
+                img.classList.add('hidden');
+                $('avatar-initial').classList.remove('hidden');
+            }
+        }
+
         function showDash() {
             $('auth-card').classList.add('hidden');
             $('dash').classList.remove('hidden');
-            $('who').textContent = localStorage.getItem('email') || '';
+            setWho();
+            setAvatar(null);
             loadSessions();
         }
 
@@ -146,6 +222,8 @@
                 $('sessions').textContent = out.data.error || 'Could not load devices.';
                 return;
             }
+            if (out.data.email) setWho(out.data.email);
+            setAvatar(out.data.avatar);
             renderSessions(out.data.sessions);
         }
 
@@ -186,6 +264,146 @@
             const data = await res.json().catch(() => ({}));
             return { res, data };
         }
+
+        function clampOffset() {
+            const s = Math.max(P / crop.img.width, P / crop.img.height) * crop.zoom;
+            const mx = Math.max(0, (crop.img.width * s - P) / 2);
+            const my = Math.max(0, (crop.img.height * s - P) / 2);
+            crop.x = Math.min(mx, Math.max(-mx, crop.x));
+            crop.y = Math.min(my, Math.max(-my, crop.y));
+        }
+
+        function drawCrop() {
+            const ctx = $('crop-canvas').getContext('2d');
+            const { img, zoom, x, y } = crop;
+            const s = Math.max(P / img.width, P / img.height) * zoom;
+            const w = img.width * s;
+            const h = img.height * s;
+
+            ctx.clearRect(0, 0, P, P);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(P / 2, P / 2, P / 2, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(img, (P - w) / 2 + x, (P - h) / 2 + y, w, h);
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.rect(0, 0, P, P);
+            ctx.arc(P / 2, P / 2, P / 2 - 1, 0, Math.PI * 2, true);
+            ctx.fillStyle = 'rgba(8, 8, 12, .68)';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(P / 2, P / 2, P / 2 - 1, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, .18)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        function setZoom(z) {
+            if (!crop) return;
+            crop.zoom = Math.min(3, Math.max(1, z));
+            $('crop-zoom').value = crop.zoom;
+            clampOffset();
+            drawCrop();
+        }
+
+        function openCrop(file) {
+            if (!file) return;
+            if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return alert('Pick a PNG, JPG or WebP image.');
+            if (file.size > 15 * 1024 * 1024) return alert('That image is over 15 MB. Pick a smaller one.');
+
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                crop = { img, zoom: 1, x: 0, y: 0, url };
+                $('crop-zoom').value = 1;
+                $('crop-msg').textContent = '';
+                $('crop').classList.remove('hidden');
+                drawCrop();
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                alert('Could not read that image. Try a PNG or JPG.');
+            };
+            img.src = url;
+        }
+
+        function closeCrop() {
+            $('crop').classList.add('hidden');
+            if (crop) URL.revokeObjectURL(crop.url);
+            crop = null;
+            drag = null;
+            $('avatar-file').value = '';
+        }
+
+        async function saveCrop() {
+            if (!crop) return;
+
+            const out = document.createElement('canvas');
+            out.width = out.height = 512;
+            const ctx = out.getContext('2d');
+            const s = Math.max(512 / crop.img.width, 512 / crop.img.height) * crop.zoom;
+            const w = crop.img.width * s;
+            const h = crop.img.height * s;
+            const k = 512 / P;
+            ctx.drawImage(crop.img, (512 - w) / 2 + crop.x * k, (512 - h) / 2 + crop.y * k, w, h);
+            const image = out.toDataURL('image/jpeg', 0.9);
+
+            const btn = $('crop-save');
+            btn.disabled = true;
+            btn.textContent = 'Saving…';
+            $('crop-msg').textContent = '';
+
+            let res;
+            try {
+                res = await post({ action: 'avatar', image }, localStorage.getItem('token'));
+            } catch {
+                btn.disabled = false;
+                btn.textContent = 'Save';
+                return $('crop-msg').textContent = 'Network error — could not upload.';
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Save';
+
+            if (res.res.status === 401) return clearAuth();
+            if (!res.res.ok) return $('crop-msg').textContent = res.data.hint || res.data.error || `Upload failed (${res.res.status}).`;
+
+            setAvatar(res.data.url);
+            closeCrop();
+        }
+
+        $('avatar-btn').onclick = () => $('avatar-file').click();
+        $('avatar-file').onchange = (e) => openCrop(e.target.files[0]);
+        $('crop-cancel').onclick = closeCrop;
+        $('crop-save').onclick = saveCrop;
+        $('crop-zoom').oninput = (e) => setZoom(Number(e.target.value));
+        $('crop').onclick = (e) => { if (e.target === $('crop')) closeCrop(); };
+        document.onkeydown = (e) => { if (e.key === 'Escape' && !$('crop').classList.contains('hidden')) closeCrop(); };
+
+        const canvas = $('crop-canvas');
+        canvas.onpointerdown = (e) => {
+            if (!crop) return;
+            drag = { px: e.clientX, py: e.clientY, x: crop.x, y: crop.y };
+            canvas.setPointerCapture(e.pointerId);
+        };
+        canvas.onpointermove = (e) => {
+            if (!crop || !drag) return;
+            const k = P / canvas.getBoundingClientRect().width;
+            crop.x = drag.x + (e.clientX - drag.px) * k;
+            crop.y = drag.y + (e.clientY - drag.py) * k;
+            clampOffset();
+            drawCrop();
+        };
+        canvas.onpointerup = canvas.onpointercancel = () => { drag = null; };
+        canvas.onwheel = (e) => {
+            if (!crop) return;
+            e.preventDefault();
+            setZoom(crop.zoom - e.deltaY * 0.0015);
+        };
 
         async function sendCode() {
             let out;
