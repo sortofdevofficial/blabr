@@ -9,6 +9,9 @@
         input, button { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
         button { background: #6366f1; border: none; color: white; cursor: pointer; }
         .hidden { display: none; }
+        .sess { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid #333; padding: 8px 0; font-size: 12px; color: #ddd; }
+        .sess button { width: auto; margin: 0; padding: 6px 10px; font-size: 12px; }
+        .sess .meta { color: #888; }
     </style>
 </head>
 <body>
@@ -30,17 +33,98 @@
     </div>
     <div class="card hidden" id="dash">
         <h2>Logged In!</h2>
-        <button onclick="localStorage.clear(); location.reload()">Logout</button>
+        <p id="who" class="meta" style="color:#aaa; text-align:center; margin:0;"></p>
+        <h3 style="font-size:12px; color:#888; margin:18px 0 0; text-transform:uppercase; letter-spacing:.06em;">Active logins</h3>
+        <div id="sessions"></div>
+        <button onclick="logout()">Logout</button>
     </div>
     <script>
         let isLogin = true;
         let pending = null;
         const $ = (id) => document.getElementById(id);
 
-        function loggedIn(token) {
+        function loggedIn(token, email) {
             localStorage.setItem('token', token);
+            if (email) localStorage.setItem('email', email);
+            showDash();
+        }
+
+        function clearAuth() {
+            localStorage.clear();
+            location.reload();
+        }
+
+        function ago(t) {
+            const d = Math.floor(Date.now() / 1000) - t;
+            if (d < 60) return 'just now';
+            if (d < 3600) return `${Math.floor(d / 60)}m ago`;
+            if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
+            return `${Math.floor(d / 86400)}d ago`;
+        }
+
+        function showDash() {
             $('auth-card').classList.add('hidden');
             $('dash').classList.remove('hidden');
+            $('who').textContent = localStorage.getItem('email') || '';
+            loadSessions();
+        }
+
+        function renderSessions(list) {
+            const box = $('sessions');
+            box.textContent = '';
+            list.forEach((s) => {
+                const row = document.createElement('div');
+                row.className = 'sess';
+
+                const info = document.createElement('div');
+                const name = document.createElement('strong');
+                name.textContent = s.device + (s.current ? ' · this device' : '');
+                const meta = document.createElement('div');
+                meta.className = 'meta';
+                meta.textContent = `${s.ip} · ${ago(s.last)}`;
+                info.append(name, meta);
+
+                const btn = document.createElement('button');
+                btn.textContent = 'Log out';
+                btn.onclick = () => revokeSession(s.id);
+
+                row.append(info, btn);
+                box.append(row);
+            });
+        }
+
+        async function loadSessions() {
+            let out;
+            try {
+                out = await post({ action: 'sessions' }, localStorage.getItem('token'));
+            } catch {
+                $('sessions').textContent = 'Network error — could not load devices.';
+                return;
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) {
+                $('sessions').textContent = out.data.error || 'Could not load devices.';
+                return;
+            }
+            renderSessions(out.data.sessions);
+        }
+
+        async function revokeSession(id) {
+            let out;
+            try {
+                out = await post({ action: 'revoke', id }, localStorage.getItem('token'));
+            } catch {
+                return alert('Network error — could not log out that device.');
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) return alert(out.data.error || 'Could not log out that device.');
+            if (out.data.current) return clearAuth();
+            loadSessions();
+        }
+
+        async function logout() {
+            await post({ action: 'revoke' }, localStorage.getItem('token')).catch(() => {});
+            clearAuth();
         }
 
         function showOtp(note) {
@@ -51,10 +135,12 @@
             $('msg').textContent = '';
         }
 
-        async function post(payload) {
+        async function post(payload, token) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers.Authorization = `Bearer ${token}`;
             const res = await fetch('/api/auth', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(payload)
             });
             const data = await res.json().catch(() => ({}));
@@ -96,7 +182,7 @@
             const { res, data } = out;
 
             if (res.ok) {
-                if (isLogin) return loggedIn(data.token);
+                if (isLogin) return loggedIn(data.token, data.email);
                 return showOtp(`Code sent to ${email}`);
             }
             if (res.status === 403 && data.verify) return showOtp('Enter the code we emailed you.');
@@ -112,7 +198,7 @@
                 return $('msg').textContent = 'Network error — could not reach the server.';
             }
             const { res, data } = out;
-            if (res.ok) return loggedIn(data.token);
+            if (res.ok) return loggedIn(data.token, data.email);
             $('msg').textContent = data.hint || data.error || `Request failed (${res.status})`;
         };
 
@@ -120,10 +206,7 @@
             if (pending) sendCode();
         };
 
-        if (localStorage.getItem('token')) {
-            $('auth-card').classList.add('hidden');
-            $('dash').classList.remove('hidden');
-        }
+        if (localStorage.getItem('token')) showDash();
     </script>
 </body>
 </html>

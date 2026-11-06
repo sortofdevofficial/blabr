@@ -12,6 +12,7 @@ let mailer = null;
 const OTP_TTL_SECONDS = 600;
 const OTP_MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
+const SESSION_TTL_SECONDS = 7 * 24 * 3600;
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 function dbHint(err) {
@@ -45,6 +46,17 @@ const userSchema = new mongoose.Schema({
 }, { versionKey: false });
 
 const User = mongoose.models.User || mongoose.model('User', userSchema);
+
+const sessionSchema = new mongoose.Schema({
+  _id: String,
+  u: { type: Number, required: true, index: true },
+  i: String,
+  d: String,
+  c: Number,
+  s: Number
+}, { versionKey: false });
+
+const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
 
 async function createUser(fields) {
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -81,9 +93,56 @@ function sendOtp(email, code) {
   });
 }
 
-function issueToken(user) {
+function clientIp(req) {
+  const headers = req.headers || {};
+  const forwarded = headers['x-forwarded-for'];
+  const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded || '').split(',')[0].trim();
+  return first || headers['x-real-ip'] || (req.socket && req.socket.remoteAddress) || 'unknown';
+}
+
+function deviceLabel(ua) {
+  const browser =
+    /Edg\//.test(ua) ? 'Edge' :
+    /OPR\//.test(ua) ? 'Opera' :
+    /Firefox\//.test(ua) ? 'Firefox' :
+    /Chrome\//.test(ua) ? 'Chrome' :
+    /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const os =
+    /Android/.test(ua) ? 'Android' :
+    /iPhone|iPad|iPod/.test(ua) ? 'iOS' :
+    /Windows/.test(ua) ? 'Windows' :
+    /Mac OS X/.test(ua) ? 'macOS' :
+    /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
+  return `${browser} · ${os}`;
+}
+
+async function createSession(req, userId) {
+  const now = nowSeconds();
+  const sid = crypto.randomBytes(12).toString('hex');
+  await Session.create({
+    _id: sid,
+    u: userId,
+    i: clientIp(req),
+    d: deviceLabel((req.headers && req.headers['user-agent']) || ''),
+    c: now,
+    s: now
+  });
+  return sid;
+}
+
+function issueToken(user, sid) {
   if (!process.env.JWT_SECRET) return null;
-  return jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ userId: user._id, sid }, process.env.JWT_SECRET, { expiresIn: '7d' });
+}
+
+function readAuth(req) {
+  const header = (req.headers && req.headers.authorization) || '';
+  if (!header.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
+  try {
+    return jwt.verify(header.slice(7), process.env.JWT_SECRET);
+  } catch {
+    return null;
+  }
 }
 
 async function handleRegister(res, email, password) {
@@ -118,7 +177,7 @@ async function handleRegister(res, email, password) {
   return res.status(200).json({ message: 'Code sent.', email });
 }
 
-async function handleVerify(res, email, otp) {
+async function handleVerify(req, res, email, otp) {
   const user = await User.findOne({ e: email });
   if (!user) return res.status(400).json({ error: 'No pending registration for that email.' });
   if (!user.o) return res.status(409).json({ error: 'Already verified — please log in.' });
@@ -137,11 +196,49 @@ async function handleVerify(res, email, otp) {
 
   await User.updateOne({ _id: user._id }, { $unset: { o: '', x: '', a: '' } });
 
-  const token = issueToken(user);
+  const sid = await createSession(req, user._id);
+  const token = issueToken(user, sid);
   if (!token) {
     return res.status(500).json({ error: 'JWT_SECRET is not set. Add it in Vercel → Project Settings → Environment Variables, then redeploy.' });
   }
   return res.status(200).json({ token, email: user.e, id: user._id });
+}
+
+async function handleSessions(req, res) {
+  const auth = readAuth(req);
+  if (!auth || !auth.sid) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  await Session.deleteMany({ s: { $lt: nowSeconds() - SESSION_TTL_SECONDS } });
+
+  const sessions = await Session.find({ u: auth.userId }).sort({ s: -1 }).lean();
+  const current = sessions.find((s) => s._id === auth.sid);
+  if (!current) return res.status(401).json({ error: 'This device was logged out.', expired: true });
+
+  await Session.updateOne({ _id: auth.sid }, { s: nowSeconds() });
+
+  return res.status(200).json({
+    sessions: sessions.map((s) => ({
+      id: s._id,
+      ip: s.i,
+      device: s.d,
+      created: s.c,
+      last: s._id === auth.sid ? nowSeconds() : s.s,
+      current: s._id === auth.sid
+    }))
+  });
+}
+
+async function handleRevoke(req, res, id) {
+  const auth = readAuth(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const target = id || auth.sid;
+  if (!target) return res.status(400).json({ error: 'Session id required.' });
+
+  const result = await Session.deleteOne({ _id: target, u: auth.userId });
+  if (!result.deletedCount) return res.status(404).json({ error: 'Session not found.' });
+
+  return res.status(200).json({ message: 'Logged out.', current: target === auth.sid });
 }
 
 module.exports = async function handler(req, res) {
@@ -153,7 +250,7 @@ module.exports = async function handler(req, res) {
     }
 
     await connectDB();
-    const { action, email, password, otp } = body;
+    const { action, email, password, otp, id } = body;
 
     if (action === 'register') {
       if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
@@ -162,7 +259,7 @@ module.exports = async function handler(req, res) {
 
     if (action === 'verify') {
       if (!email || !otp) return res.status(400).json({ error: 'Email and code required.' });
-      return await handleVerify(res, email, otp);
+      return await handleVerify(req, res, email, otp);
     }
 
     if (action === 'login') {
@@ -174,12 +271,16 @@ module.exports = async function handler(req, res) {
       if (user.o) {
         return res.status(403).json({ error: 'Email not verified. Enter the code we emailed you.', verify: true });
       }
-      const token = issueToken(user);
+      const sid = await createSession(req, user._id);
+      const token = issueToken(user, sid);
       if (!token) {
         return res.status(500).json({ error: 'JWT_SECRET is not set. Add it in Vercel → Project Settings → Environment Variables, then redeploy.' });
       }
       return res.status(200).json({ token, email: user.e, id: user._id });
     }
+
+    if (action === 'sessions') return await handleSessions(req, res);
+    if (action === 'revoke') return await handleRevoke(req, res, id);
 
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {
