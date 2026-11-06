@@ -3,12 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Auth</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/favicon.png">
+    <title>pratr</title>
     <style>
         * { box-sizing: border-box; }
         body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; color: #f2f2f4; background: radial-gradient(1200px 600px at 50% -10%, #1b1b22 0%, #0e0e11 60%); }
         .card { background: #17171b; padding: 26px; border-radius: 16px; width: 100%; max-width: 320px; flex: 0 0 auto; border: 1px solid #26262d; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
-        #dash { max-width: 380px; }
+        #dash { max-width: 380px; position: relative; }
+        img { -webkit-user-drag: none; user-select: none; }
+        .brand { display: flex; justify-content: center; margin: 0 0 16px; }
+        .brand img { width: 150px; height: 64px; object-fit: cover; object-position: 50% 31%; background: #fff; border-radius: 10px; display: block; }
+        .brand.small { position: absolute; top: 18px; right: 18px; margin: 0; }
+        .brand.small img { width: 78px; height: 30px; border-radius: 7px; }
         h2 { margin: 0 0 14px; font-size: 20px; letter-spacing: -.015em; }
         h3 { font-size: 11px; color: #8b8b96; margin: 20px 0 4px; text-transform: uppercase; letter-spacing: .08em; }
         input, button { width: 100%; padding: 11px 12px; margin: 8px 0; font: inherit; border-radius: 9px; }
@@ -28,14 +35,18 @@
         #otp-note { margin: 0 0 10px; }
         #msg { color: #ff6b6b; text-align: center; font-size: 13px; margin: 8px 0 0; min-height: 18px; }
 
-        .dash-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+        .dash-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; padding-right: 86px; }
         .dash-head h2 { margin: 0 0 2px; font-size: 17px; }
         .dash-head #who { margin: 0; text-align: left; color: #8b8b96; font-size: 12.5px; word-break: break-all; }
         .avatar { position: relative; width: 64px; height: 64px; margin: 0; padding: 0; flex: 0 0 auto; border-radius: 50%; overflow: hidden; border: 2px solid #2b2b33; background: linear-gradient(135deg, #6366f1, #8b5cf6); font-size: 24px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
         .avatar:hover { border-color: #4d4d5a; }
         .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+        .avatar img.hidden { display: none; }
         .avatar .edit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .55); color: #fff; font-size: 11px; font-weight: 500; opacity: 0; transition: opacity .15s; }
-        .avatar:hover .edit, .avatar:focus-visible .edit { opacity: 1; }
+        .avatar:focus-visible .edit { opacity: 1; }
+        @media (hover: hover) {
+            .avatar:hover .edit { opacity: 1; }
+        }
 
         .sess { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid #24242b; padding: 9px 0; }
         .sess:first-child { border-top: none; }
@@ -47,11 +58,13 @@
         .sess button.ghost { background: #24242b; color: #c9c9d4; font-weight: 500; }
         .sess button.ghost:hover { background: #2f2f38; }
 
-        .modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .72); backdrop-filter: blur(2px); }
-        .modal-card { background: #17171b; border: 1px solid #2b2b33; border-radius: 16px; padding: 20px; width: 100%; max-width: 360px; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
-        .modal-card h2 { margin: 0 0 14px; font-size: 17px; }
+        .modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; background: rgba(0, 0, 0, .72); backdrop-filter: blur(2px); }
+        .modal-card { position: relative; background: #17171b; border: 1px solid #2b2b33; border-radius: 16px; padding: 20px; width: 100%; max-width: 360px; margin: auto; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+        .modal-card h2 { margin: 0 0 14px; font-size: 17px; padding-right: 34px; }
+        .modal-close { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; margin: 0; padding: 0; border-radius: 8px; background: #24242b; color: #c9c9d4; font-size: 18px; font-weight: 400; line-height: 1; display: flex; align-items: center; justify-content: center; }
+        .modal-close:hover { background: #2f2f38; }
         .crop-stage { display: flex; justify-content: center; margin-bottom: 12px; }
-        #crop-canvas { width: 100%; max-width: 280px; height: auto; display: block; border-radius: 12px; cursor: grab; touch-action: none; }
+        #crop-canvas { width: 100%; max-width: min(280px, 46vh); height: auto; display: block; border-radius: 12px; cursor: grab; touch-action: none; }
         #crop-canvas:active { cursor: grabbing; }
         #crop-zoom { padding: 0; margin: 0 0 12px; height: 22px; background: none; border: none; box-shadow: none; accent-color: #6366f1; cursor: pointer; }
         #crop-zoom:focus { box-shadow: none; }
@@ -60,10 +73,12 @@
         .modal-actions button { margin: 0; }
         .modal-actions .ghost { background: #24242b; color: #c9c9d4; }
         .modal-actions .ghost:hover { background: #2f2f38; }
+        .file-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
     </style>
 </head>
 <body>
     <div class="card" id="auth-card">
+        <div class="brand"><img src="/favicon.png" alt="pratr"></div>
         <h2 id="title">Login</h2>
         <form id="form">
             <input type="email" id="email" placeholder="Email" autocomplete="email" required>
@@ -80,6 +95,7 @@
         <p id="msg"></p>
     </div>
     <div class="card hidden" id="dash">
+        <div class="brand small"><img src="/favicon.png" alt="pratr"></div>
         <div class="dash-head">
             <button type="button" class="avatar" id="avatar-btn" title="Change profile photo">
                 <img id="avatar-img" alt="Profile photo" class="hidden">
@@ -91,7 +107,7 @@
                 <p id="who"></p>
             </div>
         </div>
-        <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="hidden">
+        <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="file-input">
         <h3>Active logins</h3>
         <div id="sessions"></div>
         <button onclick="logout()">Logout</button>
@@ -99,6 +115,7 @@
 
     <div class="modal hidden" id="crop">
         <div class="modal-card">
+            <button type="button" class="modal-close" id="crop-close" aria-label="Close">×</button>
             <h2>Change profile photo</h2>
             <div class="crop-stage">
                 <canvas id="crop-canvas" width="320" height="320"></canvas>
@@ -149,10 +166,12 @@
         function setAvatar(url) {
             const img = $('avatar-img');
             if (url) {
+                img.onerror = () => setAvatar(null);
                 img.src = url;
                 img.classList.remove('hidden');
                 $('avatar-initial').classList.add('hidden');
             } else {
+                img.onerror = null;
                 img.removeAttribute('src');
                 img.classList.add('hidden');
                 $('avatar-initial').classList.remove('hidden');
@@ -256,13 +275,20 @@
         async function post(payload, token) {
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers.Authorization = `Bearer ${token}`;
-            const res = await fetch('/api/auth', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json().catch(() => ({}));
-            return { res, data };
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 20000);
+            try {
+                const res = await fetch('/api/auth', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload),
+                    signal: ctrl.signal
+                });
+                const data = await res.json().catch(() => ({}));
+                return { res, data };
+            } finally {
+                clearTimeout(timer);
+            }
         }
 
         function clampOffset() {
@@ -342,20 +368,27 @@
         async function saveCrop() {
             if (!crop) return;
 
-            const out = document.createElement('canvas');
-            out.width = out.height = 512;
-            const ctx = out.getContext('2d');
-            const s = Math.max(512 / crop.img.width, 512 / crop.img.height) * crop.zoom;
-            const w = crop.img.width * s;
-            const h = crop.img.height * s;
-            const k = 512 / P;
-            ctx.drawImage(crop.img, (512 - w) / 2 + crop.x * k, (512 - h) / 2 + crop.y * k, w, h);
-            const image = out.toDataURL('image/jpeg', 0.9);
-
             const btn = $('crop-save');
             btn.disabled = true;
             btn.textContent = 'Saving…';
             $('crop-msg').textContent = '';
+
+            let image;
+            try {
+                const out = document.createElement('canvas');
+                out.width = out.height = 512;
+                const ctx = out.getContext('2d');
+                const s = Math.max(512 / crop.img.width, 512 / crop.img.height) * crop.zoom;
+                const w = crop.img.width * s;
+                const h = crop.img.height * s;
+                const k = 512 / P;
+                ctx.drawImage(crop.img, (512 - w) / 2 + crop.x * k, (512 - h) / 2 + crop.y * k, w, h);
+                image = out.toDataURL('image/jpeg', 0.9);
+            } catch {
+                btn.disabled = false;
+                btn.textContent = 'Save';
+                return $('crop-msg').textContent = 'Could not prepare that image. Try another one.';
+            }
 
             let res;
             try {
@@ -371,6 +404,7 @@
 
             if (res.res.status === 401) return clearAuth();
             if (!res.res.ok) return $('crop-msg').textContent = res.data.hint || res.data.error || `Upload failed (${res.res.status}).`;
+            if (!res.data.url) return $('crop-msg').textContent = 'The server did not return an image URL.';
 
             setAvatar(res.data.url);
             closeCrop();
@@ -379,7 +413,9 @@
         $('avatar-btn').onclick = () => $('avatar-file').click();
         $('avatar-file').onchange = (e) => openCrop(e.target.files[0]);
         $('crop-cancel').onclick = closeCrop;
+        $('crop-close').onclick = closeCrop;
         $('crop-save').onclick = saveCrop;
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
         $('crop-zoom').oninput = (e) => setZoom(Number(e.target.value));
         $('crop').onclick = (e) => { if (e.target === $('crop')) closeCrop(); };
         document.onkeydown = (e) => { if (e.key === 'Escape' && !$('crop').classList.contains('hidden')) closeCrop(); };
