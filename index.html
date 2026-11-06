@@ -4,37 +4,59 @@
     <meta charset="UTF-8">
     <title>Auth</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #121212; color: #fff; margin: 0; }
-        .card { background: #1e1e1e; padding: 30px; border-radius: 8px; width: 300px; }
-        input, button { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
-        button { background: #6366f1; border: none; color: white; cursor: pointer; }
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; color: #f2f2f4; background: radial-gradient(1200px 600px at 50% -10%, #1b1b22 0%, #0e0e11 60%); }
+        .card { background: #17171b; padding: 26px; border-radius: 14px; width: 100%; max-width: 320px; flex: 0 0 auto; border: 1px solid #26262d; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
+        h2 { margin: 0 0 14px; font-size: 20px; letter-spacing: -.015em; }
+        h3 { font-size: 11px; color: #8b8b96; margin: 20px 0 4px; text-transform: uppercase; letter-spacing: .08em; }
+        input, button { width: 100%; padding: 11px 12px; margin: 8px 0; font: inherit; border-radius: 9px; }
+        input { background: #101014; border: 1px solid #2b2b33; color: #f2f2f4; outline: none; transition: border-color .15s, box-shadow .15s; }
+        input::placeholder { color: #6b6b76; }
+        input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, .18); }
+        button { background: #6366f1; border: none; color: #fff; font-weight: 600; cursor: pointer; transition: background .15s, transform .06s; }
+        button:hover { background: #5457e5; }
+        button:active { transform: translateY(1px); }
         .hidden { display: none; }
-        .sess { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid #333; padding: 8px 0; font-size: 12px; color: #ddd; }
-        .sess button { width: auto; margin: 0; padding: 6px 10px; font-size: 12px; }
-        .sess .meta { color: #888; }
+        #toggle, #resend, #otp-note { color: #8b8b96; text-align: center; font-size: 13px; }
+        #toggle { cursor: pointer; margin: 10px 0 0; transition: color .15s; }
+        #toggle:hover { color: #c9c9d4; }
+        #resend { cursor: pointer; color: #6366f1; margin: 10px 0 0; }
+        #resend:hover { text-decoration: underline; }
+        #otp-note { margin: 0 0 10px; }
+        #msg { color: #ff6b6b; text-align: center; font-size: 13px; margin: 8px 0 0; min-height: 18px; }
+        #who { color: #8b8b96; font-size: 13px; text-align: center; margin: 0; }
+        .sess { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid #24242b; padding: 9px 0; }
+        .sess:first-child { border-top: none; }
+        .sess strong { display: block; font-size: 12.5px; font-weight: 600; }
+        .sess .meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; color: #8b8b96; font-size: 12px; }
+        .sess .ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #101014; background: #101014; border: 1px solid #101014; border-radius: 4px; padding: 1px 5px; transition: color .15s, background .15s, border-color .15s; }
+        .sess .ip.revealed { color: #c9c9d4; background: #24242b; border-color: #2f2f38; }
+        .sess button { width: auto; margin: 0; padding: 5px 9px; font-size: 11px; border-radius: 7px; }
+        .sess button.ghost { background: #24242b; color: #c9c9d4; font-weight: 500; }
+        .sess button.ghost:hover { background: #2f2f38; }
     </style>
 </head>
 <body>
     <div class="card" id="auth-card">
         <h2 id="title">Login</h2>
         <form id="form">
-            <input type="email" id="email" placeholder="Email" required>
-            <input type="password" id="password" placeholder="Password" required>
+            <input type="email" id="email" placeholder="Email" autocomplete="email" required>
+            <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
             <button type="submit" id="btn">Login</button>
         </form>
         <form id="otp-form" class="hidden">
-            <p id="otp-note" style="color:#aaa; text-align:center; margin:0 0 10px;"></p>
-            <input id="otp" inputmode="numeric" maxlength="6" placeholder="6-digit code" required>
+            <p id="otp-note"></p>
+            <input id="otp" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code" spellcheck="false" required>
             <button type="submit">Verify</button>
-            <p id="resend" style="cursor:pointer; color:#6366f1; text-align:center; margin:10px 0 0;">Resend code</p>
+            <p id="resend">Resend code</p>
         </form>
-        <p id="toggle" style="cursor:pointer; color:#aaa; text-align:center;">Need an account? Register</p>
-        <p id="msg" style="color:red; text-align:center;"></p>
+        <p id="toggle">Need an account? Register</p>
+        <p id="msg"></p>
     </div>
     <div class="card hidden" id="dash">
         <h2>Logged In!</h2>
-        <p id="who" class="meta" style="color:#aaa; text-align:center; margin:0;"></p>
-        <h3 style="font-size:12px; color:#888; margin:18px 0 0; text-transform:uppercase; letter-spacing:.06em;">Active logins</h3>
+        <p id="who"></p>
+        <h3>Active logins</h3>
         <div id="sessions"></div>
         <button onclick="logout()">Logout</button>
     </div>
@@ -79,9 +101,27 @@
                 const info = document.createElement('div');
                 const name = document.createElement('strong');
                 name.textContent = s.device + (s.current ? ' · this device' : '');
+
                 const meta = document.createElement('div');
                 meta.className = 'meta';
-                meta.textContent = `${s.ip} · ${ago(s.last)}`;
+
+                const ip = document.createElement('span');
+                ip.className = 'ip';
+                ip.textContent = s.ip;
+
+                const show = document.createElement('button');
+                show.type = 'button';
+                show.className = 'ghost';
+                show.textContent = 'Show';
+                show.onclick = () => {
+                    const on = ip.classList.toggle('revealed');
+                    show.textContent = on ? 'Hide' : 'Show';
+                };
+
+                const when = document.createElement('span');
+                when.textContent = ago(s.last);
+
+                meta.append(ip, show, when);
                 info.append(name, meta);
 
                 const btn = document.createElement('button');
