@@ -19,6 +19,12 @@
             <input type="password" id="password" placeholder="Password" required>
             <button type="submit" id="btn">Login</button>
         </form>
+        <form id="otp-form" class="hidden">
+            <p id="otp-note" style="color:#aaa; text-align:center; margin:0 0 10px;"></p>
+            <input id="otp" inputmode="numeric" maxlength="6" placeholder="6-digit code" required>
+            <button type="submit">Verify</button>
+            <p id="resend" style="cursor:pointer; color:#6366f1; text-align:center; margin:10px 0 0;">Resend code</p>
+        </form>
         <p id="toggle" style="cursor:pointer; color:#aaa; text-align:center;">Need an account? Register</p>
         <p id="msg" style="color:red; text-align:center;"></p>
     </div>
@@ -28,42 +34,95 @@
     </div>
     <script>
         let isLogin = true;
-        document.getElementById('toggle').onclick = () => {
+        let pending = null;
+        const $ = (id) => document.getElementById(id);
+
+        function loggedIn(token) {
+            localStorage.setItem('token', token);
+            $('auth-card').classList.add('hidden');
+            $('dash').classList.remove('hidden');
+        }
+
+        function showOtp(note) {
+            $('form').classList.add('hidden');
+            $('toggle').classList.add('hidden');
+            $('otp-form').classList.remove('hidden');
+            $('otp-note').textContent = note;
+            $('msg').textContent = '';
+        }
+
+        async function post(payload) {
+            const res = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(() => ({}));
+            return { res, data };
+        }
+
+        async function sendCode() {
+            let out;
+            try {
+                out = await post({ action: 'register', email: pending.email, password: pending.password });
+            } catch {
+                return $('msg').textContent = 'Network error — could not reach the server.';
+            }
+            const { res, data } = out;
+            if (!res.ok) return $('msg').textContent = data.hint || data.error || `Request failed (${res.status})`;
+            showOtp(`Code sent to ${pending.email}`);
+        }
+
+        $('toggle').onclick = () => {
             isLogin = !isLogin;
-            document.getElementById('title').textContent = isLogin ? 'Login' : 'Register';
-            document.getElementById('btn').textContent = isLogin ? 'Login' : 'Register';
-            document.getElementById('toggle').textContent = isLogin ? 'Need an account? Register' : 'Already have an account? Login';
+            $('title').textContent = isLogin ? 'Login' : 'Register';
+            $('btn').textContent = isLogin ? 'Login' : 'Register';
+            $('toggle').textContent = isLogin ? 'Need an account? Register' : 'Already have an account? Login';
+            $('msg').textContent = '';
         };
 
-        document.getElementById('form').onsubmit = async (e) => {
+        $('form').onsubmit = async (e) => {
             e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            let res, data;
+            const email = $('email').value;
+            const password = $('password').value;
+            pending = { email, password };
+
+            let out;
             try {
-                res = await fetch('/api/auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: isLogin ? 'login' : 'register', email, password })
-                });
-                data = await res.json().catch(() => ({}));
+                out = await post({ action: isLogin ? 'login' : 'register', email, password });
             } catch {
-                return document.getElementById('msg').textContent = 'Network error — could not reach the server.';
+                return $('msg').textContent = 'Network error — could not reach the server.';
             }
-            if (!res.ok) return document.getElementById('msg').textContent = data.hint || data.error || `Request failed (${res.status})`;
-            if (isLogin) {
-                localStorage.setItem('token', data.token);
-                document.getElementById('auth-card').classList.add('hidden');
-                document.getElementById('dash').classList.remove('hidden');
-            } else {
-                alert('Account created! Now login.');
-                document.getElementById('toggle').click();
+            const { res, data } = out;
+
+            if (res.ok) {
+                if (isLogin) return loggedIn(data.token);
+                return showOtp(`Code sent to ${email}`);
             }
+            if (res.status === 403 && data.verify) return showOtp('Enter the code we emailed you.');
+            $('msg').textContent = data.hint || data.error || `Request failed (${res.status})`;
+        };
+
+        $('otp-form').onsubmit = async (e) => {
+            e.preventDefault();
+            let out;
+            try {
+                out = await post({ action: 'verify', email: pending.email, otp: $('otp').value.trim() });
+            } catch {
+                return $('msg').textContent = 'Network error — could not reach the server.';
+            }
+            const { res, data } = out;
+            if (res.ok) return loggedIn(data.token);
+            $('msg').textContent = data.hint || data.error || `Request failed (${res.status})`;
+        };
+
+        $('resend').onclick = () => {
+            if (pending) sendCode();
         };
 
         if (localStorage.getItem('token')) {
-            document.getElementById('auth-card').classList.add('hidden');
-            document.getElementById('dash').classList.remove('hidden');
+            $('auth-card').classList.add('hidden');
+            $('dash').classList.remove('hidden');
         }
     </script>
 </body>
