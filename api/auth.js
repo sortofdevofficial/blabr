@@ -74,7 +74,6 @@ const sessionSchema = new mongoose.Schema({
   u: { type: Number, required: true, index: true },
   i: String,
   d: String,
-  c: Number,
   s: Number
 }, { versionKey: false });
 
@@ -181,7 +180,6 @@ async function createSession(req, userId) {
     u: userId,
     i: clientIp(req),
     d: deviceLabel((req.headers && req.headers['user-agent']) || ''),
-    c: now,
     s: now
   });
   return sid;
@@ -279,6 +277,7 @@ async function handleSessions(req, res) {
   if (!auth || !auth.sid) return res.status(401).json({ error: 'Please log in again.', expired: true });
 
   await Session.deleteMany({ s: { $lt: nowSeconds() - SESSION_TTL_SECONDS } });
+  await Session.collection.updateMany({ c: { $exists: true } }, { $unset: { c: '' } });
 
   const sessions = await Session.find({ u: auth.userId }).sort({ s: -1 }).lean();
   const current = sessions.find((s) => s._id === auth.sid);
@@ -296,7 +295,6 @@ async function handleSessions(req, res) {
       id: s._id,
       ip: s.i,
       device: s.d,
-      created: s.c,
       last: s._id === auth.sid ? nowSeconds() : s.s,
       current: s._id === auth.sid
     }))
