@@ -79,6 +79,17 @@ const sessionSchema = new mongoose.Schema({
 
 const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
 
+const friendSchema = new mongoose.Schema({
+  _id: String,
+  a: { type: Number, required: true, index: true },
+  b: { type: Number, required: true, index: true },
+  r: { type: Number, required: true },
+  s: { type: String, default: 'p' },
+  t: { type: Number, default: nowSeconds }
+}, { versionKey: false });
+
+const Friend = mongoose.models.Friend || mongoose.model('Friend', friendSchema, 'friends');
+
 async function createUser(fields) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const last = await User.findOne({ _id: { $type: 'number' } }).sort({ _id: -1 }).select('_id').lean();
@@ -338,6 +349,113 @@ async function handleAvatar(req, res, image) {
   return res.status(200).json({ url });
 }
 
+async function requireLiveSession(req) {
+  const auth = readAuth(req);
+  if (!auth || !auth.sid) return null;
+  const live = await Session.findOne({ _id: auth.sid, u: auth.userId }).select('_id').lean();
+  return live ? auth : null;
+}
+
+const pairKey = (x, y) => (x < y ? `${x}:${y}` : `${y}:${x}`);
+
+async function handleFriends(req, res) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const docs = await Friend.find({ $or: [{ a: auth.userId }, { b: auth.userId }] }).lean();
+  const otherIds = docs.map((f) => (f.a === auth.userId ? f.b : f.a));
+  const users = otherIds.length ? await User.find({ _id: { $in: otherIds } }).select('e av').lean() : [];
+  const byId = new Map(users.map((u) => [u._id, u]));
+
+  const friends = [];
+  const incoming = [];
+  const outgoing = [];
+  for (const f of docs) {
+    const other = f.a === auth.userId ? f.b : f.a;
+    const u = byId.get(other);
+    if (!u) continue;
+    const item = { id: other, email: u.e, avatar: u.av || null };
+    if (f.s === 'a') friends.push(item);
+    else if (f.s === 'p') (f.r === auth.userId ? outgoing : incoming).push({ ...item, t: f.t });
+  }
+  friends.sort((x, y) => x.email.localeCompare(y.email));
+  incoming.sort((x, y) => y.t - x.t);
+  outgoing.sort((x, y) => y.t - x.t);
+
+  return res.status(200).json({ friends, incoming, outgoing });
+}
+
+async function handleFriendRequest(req, res, email) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const key = normalizeEmail(email);
+  if (!key) return res.status(400).json({ error: 'Enter their email.' });
+
+  const target = await User.findOne({ e: key }).select('_id').lean();
+  if (!target) return res.status(404).json({ error: 'No account with that email.' });
+  if (target._id === auth.userId) return res.status(400).json({ error: 'That is your own email.' });
+
+  const id = pairKey(auth.userId, target._id);
+  const now = nowSeconds();
+  const existing = await Friend.findById(id).lean();
+
+  if (existing) {
+    if (existing.s === 'a') return res.status(409).json({ error: 'You are already friends.' });
+    if (existing.s === 'p') {
+      if (existing.r === auth.userId) return res.status(409).json({ error: 'Request already pending.' });
+      await Friend.updateOne({ _id: id }, { s: 'a', t: now });
+      return res.status(200).json({ status: 'a' });
+    }
+    await Friend.updateOne({ _id: id }, { s: 'p', r: auth.userId, t: now });
+    return res.status(200).json({ status: 'p' });
+  }
+
+  try {
+    await Friend.create({
+      _id: id,
+      a: Math.min(auth.userId, target._id),
+      b: Math.max(auth.userId, target._id),
+      r: auth.userId,
+      s: 'p',
+      t: now
+    });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: 'Request already pending.' });
+    throw err;
+  }
+  return res.status(200).json({ status: 'p' });
+}
+
+async function handleFriendRespond(req, res, id, accept) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const other = Number(id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Friend id required.' });
+
+  const key = pairKey(auth.userId, other);
+  const f = await Friend.findById(key).lean();
+  if (!f || f.s !== 'p') return res.status(404).json({ error: 'No pending request from them.' });
+  if (f.r === auth.userId) return res.status(400).json({ error: 'That request came from you.' });
+
+  const status = accept ? 'a' : 'd';
+  await Friend.updateOne({ _id: key }, { s: status, t: nowSeconds() });
+  return res.status(200).json({ status });
+}
+
+async function handleFriendRemove(req, res, id) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const other = Number(id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Friend id required.' });
+
+  const result = await Friend.deleteOne({ _id: pairKey(auth.userId, other) });
+  if (!result.deletedCount) return res.status(404).json({ error: 'Nothing to remove.' });
+  return res.status(200).json({ ok: true });
+}
+
 async function handleRevoke(req, res, id) {
   const auth = readAuth(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
@@ -360,7 +478,7 @@ module.exports = async function handler(req, res) {
     }
 
     await connectDB();
-    const { action, email, password, otp, id, image } = body;
+    const { action, email, password, otp, id, image, accept } = body;
 
     if (action === 'register') {
       if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
@@ -401,6 +519,10 @@ module.exports = async function handler(req, res) {
     if (action === 'sessions') return await handleSessions(req, res);
     if (action === 'revoke') return await handleRevoke(req, res, id);
     if (action === 'avatar') return await handleAvatar(req, res, image);
+    if (action === 'friends') return await handleFriends(req, res);
+    if (action === 'request') return await handleFriendRequest(req, res, email);
+    if (action === 'respond') return await handleFriendRespond(req, res, id, !!accept);
+    if (action === 'remove') return await handleFriendRemove(req, res, id);
 
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {

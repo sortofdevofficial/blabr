@@ -9,7 +9,7 @@
     <style>
         * { box-sizing: border-box; }
         body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; color: #f2f2f4; background: radial-gradient(1200px 600px at 50% -10%, #1b1b22 0%, #0e0e11 60%); }
-        .card { background: #17171b; padding: 26px; border-radius: 16px; width: 100%; max-width: 320px; flex: 0 0 auto; border: 1px solid #26262d; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
+        .card { background: #17171b; padding: 26px; border-radius: 16px; width: 100%; max-width: 320px; flex: 0 0 auto; margin: auto 0; border: 1px solid #26262d; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
         #dash { max-width: 380px; position: relative; }
         img { -webkit-user-drag: none; user-select: none; }
         .brand { display: flex; justify-content: center; margin: 0 0 16px; }
@@ -57,6 +57,22 @@
         .sess button { width: auto; margin: 0; padding: 5px 9px; font-size: 11px; border-radius: 7px; }
         .sess button.ghost { background: #24242b; color: #c9c9d4; font-weight: 500; }
         .sess button.ghost:hover { background: #2f2f38; }
+
+        #friend-form { display: flex; gap: 8px; }
+        #friend-form input { flex: 1; min-width: 0; }
+        #friend-form button { width: auto; padding: 0 14px; font-size: 12.5px; white-space: nowrap; }
+        #friend-msg { color: #ff6b6b; text-align: center; font-size: 12px; margin: 6px 0 0; min-height: 16px; }
+        .frow { display: flex; align-items: center; gap: 10px; border-top: 1px solid #24242b; padding: 9px 0; }
+        .frow:first-child { border-top: none; }
+        .fava { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+        .fava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .finfo { flex: 1; min-width: 0; }
+        .finfo strong { display: block; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .finfo span { font-size: 11.5px; color: #8b8b96; }
+        .frow button { width: auto; margin: 0; padding: 5px 9px; font-size: 11px; border-radius: 7px; }
+        .frow button.ghost { background: #24242b; color: #c9c9d4; font-weight: 500; }
+        .frow button.ghost:hover { background: #2f2f38; }
+        .fempty { color: #6b6b76; font-size: 12px; margin: 2px 0 0; }
 
         .modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; background: rgba(0, 0, 0, .72); backdrop-filter: blur(2px); }
         .modal-card { position: relative; background: #17171b; border: 1px solid #2b2b33; border-radius: 16px; padding: 20px; width: 100%; max-width: 360px; margin: auto; box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
@@ -110,6 +126,14 @@
         <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="file-input">
         <h3>Active logins</h3>
         <div id="sessions"></div>
+        <h3>Friends</h3>
+        <form id="friend-form">
+            <input type="email" id="friend-email" placeholder="Add friend by email" autocomplete="email" required>
+            <button type="submit" id="friend-add">Add</button>
+        </form>
+        <p id="friend-msg"></p>
+        <div id="friend-in"></div>
+        <div id="friend-list"></div>
         <button onclick="logout()">Logout</button>
     </div>
 
@@ -184,6 +208,7 @@
             setWho();
             setAvatar(null);
             loadSessions();
+            loadFriends();
         }
 
         function renderSessions(list) {
@@ -257,6 +282,128 @@
             if (!out.res.ok) return alert(out.data.error || 'Could not log out that device.');
             if (out.data.current) return clearAuth();
             loadSessions();
+        }
+
+        async function loadFriends() {
+            let out;
+            try {
+                out = await post({ action: 'friends' }, localStorage.getItem('token'));
+            } catch {
+                $('friend-msg').textContent = 'Network error — could not load friends.';
+                return;
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) {
+                $('friend-msg').textContent = out.data.error || 'Could not load friends.';
+                return;
+            }
+            renderFriends(out.data);
+        }
+
+        function friendAvatar(u) {
+            const av = document.createElement('div');
+            av.className = 'fava';
+            av.textContent = (u.email[0] || '?').toUpperCase();
+            if (u.avatar) {
+                const img = document.createElement('img');
+                img.alt = '';
+                img.onerror = () => {
+                    img.remove();
+                    av.textContent = (u.email[0] || '?').toUpperCase();
+                };
+                img.src = u.avatar;
+                av.textContent = '';
+                av.append(img);
+            }
+            return av;
+        }
+
+        function friendRow(u, actions, sub) {
+            const row = document.createElement('div');
+            row.className = 'frow';
+
+            const info = document.createElement('div');
+            info.className = 'finfo';
+            const name = document.createElement('strong');
+            name.textContent = u.email;
+            info.append(name);
+            if (sub) {
+                const note = document.createElement('span');
+                note.textContent = sub;
+                info.append(note);
+            }
+
+            row.append(friendAvatar(u), info);
+            actions.forEach((a) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = a.label;
+                if (a.ghost) b.className = 'ghost';
+                b.onclick = a.onclick;
+                row.append(b);
+            });
+            return row;
+        }
+
+        function emptyNote(box, text) {
+            if (box.children.length) return;
+            const p = document.createElement('p');
+            p.className = 'fempty';
+            p.textContent = text;
+            box.append(p);
+        }
+
+        function renderFriends(data) {
+            const reqBox = $('friend-in');
+            const listBox = $('friend-list');
+            reqBox.textContent = '';
+            listBox.textContent = '';
+
+            (data.incoming || []).forEach((u) => {
+                reqBox.append(friendRow(u, [
+                    { label: 'Accept', onclick: () => respondFriend(u.id, true) },
+                    { label: 'Deny', ghost: true, onclick: () => respondFriend(u.id, false) }
+                ], 'wants to be friends'));
+            });
+            (data.outgoing || []).forEach((u) => {
+                reqBox.append(friendRow(u, [
+                    { label: 'Cancel', ghost: true, onclick: () => removeFriend(u.id) }
+                ], `Requested ${ago(u.t)}`));
+            });
+            (data.friends || []).forEach((u) => {
+                listBox.append(friendRow(u, [
+                    { label: 'Remove', ghost: true, onclick: () => removeFriend(u.id) }
+                ]));
+            });
+
+            emptyNote(reqBox, 'No pending requests.');
+            emptyNote(listBox, 'No friends yet.');
+        }
+
+        async function respondFriend(id, accept) {
+            let out;
+            try {
+                out = await post({ action: 'respond', id, accept }, localStorage.getItem('token'));
+            } catch {
+                return $('friend-msg').textContent = 'Network error — try again.';
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) return $('friend-msg').textContent = out.data.error || 'Could not update the request.';
+            $('friend-msg').textContent = '';
+            loadFriends();
+        }
+
+        async function removeFriend(id) {
+            let out;
+            try {
+                out = await post({ action: 'remove', id }, localStorage.getItem('token'));
+            } catch {
+                return $('friend-msg').textContent = 'Network error — try again.';
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) return $('friend-msg').textContent = out.data.error || 'Could not remove.';
+            $('friend-msg').textContent = '';
+            loadFriends();
         }
 
         async function logout() {
@@ -498,6 +645,25 @@
 
         $('resend').onclick = () => {
             if (pending) sendCode();
+        };
+
+        $('friend-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const email = $('friend-email').value.trim();
+            if (!email) return;
+            $('friend-msg').textContent = '';
+
+            let out;
+            try {
+                out = await post({ action: 'request', email }, localStorage.getItem('token'));
+            } catch {
+                return $('friend-msg').textContent = 'Network error — try again.';
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) return $('friend-msg').textContent = out.data.error || 'Could not send the request.';
+
+            $('friend-email').value = '';
+            loadFriends();
         };
 
         if (localStorage.getItem('token')) showDash();
