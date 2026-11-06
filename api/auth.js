@@ -13,7 +13,13 @@ const OTP_TTL_SECONDS = 600;
 const OTP_MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 const SESSION_TTL_SECONDS = 7 * 24 * 3600;
+const PRESENCE_TTL_SECONDS = 10 * 60;
 const nowSeconds = () => Math.floor(Date.now() / 1000);
+
+function presenceOf(user) {
+  if (!user.o || nowSeconds() - user.o > PRESENCE_TTL_SECONDS) return 'offline';
+  return user.i ? 'idle' : 'online';
+}
 
 function dbHint(err) {
   const uri = process.env.MONGO_URI;
@@ -41,6 +47,8 @@ const userSchema = new mongoose.Schema({
   p: { type: String, required: true },
   n: { type: String, unique: true, sparse: true, trim: true },
   c: { type: Number, default: nowSeconds },
+  o: Number,
+  i: Number,
   av: String
 }, { versionKey: false });
 
@@ -235,6 +243,7 @@ async function createSession(req, userId) {
     d: deviceLabel((req.headers && req.headers['user-agent']) || ''),
     s: now
   });
+  await User.updateOne({ _id: userId }, { o: now, i: 0 });
   return sid;
 }
 
@@ -424,7 +433,7 @@ async function handleFriends(req, res) {
 
   const docs = await Friend.find({ $or: [{ a: auth.userId }, { b: auth.userId }] }).lean();
   const otherIds = docs.map((f) => (f.a === auth.userId ? f.b : f.a));
-  const users = otherIds.length ? await User.find({ _id: { $in: otherIds } }).select('e n av').lean() : [];
+  const users = otherIds.length ? await User.find({ _id: { $in: otherIds } }).select('e n av o i').lean() : [];
   const byId = new Map(users.map((u) => [u._id, u]));
 
   const friends = [];
@@ -434,7 +443,7 @@ async function handleFriends(req, res) {
     const other = f.a === auth.userId ? f.b : f.a;
     const u = byId.get(other);
     if (!u) continue;
-    const item = { id: other, email: u.e, username: u.n || null, avatar: u.av || null };
+    const item = { id: other, email: u.e, username: u.n || null, avatar: u.av || null, status: presenceOf(u) };
     if (f.s === 'a') friends.push(item);
     else if (f.s === 'p') (f.r === auth.userId ? outgoing : incoming).push({ ...item, t: f.t });
   }
@@ -546,6 +555,15 @@ async function handleUsername(req, res, raw) {
   return res.status(200).json({ username: name });
 }
 
+async function handlePing(req, res, state) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const idle = state === 'idle';
+  await User.updateOne({ _id: auth.userId }, { o: nowSeconds(), i: idle ? 1 : 0 });
+  return res.status(200).json({ status: idle ? 'idle' : 'online' });
+}
+
 async function handleRevoke(req, res, id) {
   const auth = readAuth(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
@@ -555,6 +573,9 @@ async function handleRevoke(req, res, id) {
 
   const result = await Session.deleteOne({ _id: target, u: auth.userId });
   if (!result.deletedCount) return res.status(404).json({ error: 'Session not found.' });
+
+  const left = await Session.countDocuments({ u: auth.userId });
+  if (!left) await User.updateOne({ _id: auth.userId }, { o: 0, i: 0 });
 
   return res.status(200).json({ message: 'Logged out.', current: target === auth.sid });
 }
@@ -568,7 +589,7 @@ module.exports = async function handler(req, res) {
     }
 
     await connectDB();
-    const { action, email, password, otp, id, image, accept, username } = body;
+    const { action, email, password, otp, id, image, accept, username, state } = body;
 
     if (action === 'register') {
       if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
@@ -614,6 +635,7 @@ module.exports = async function handler(req, res) {
     if (action === 'respond') return await handleFriendRespond(req, res, id, !!accept);
     if (action === 'remove') return await handleFriendRemove(req, res, id);
     if (action === 'username') return await handleUsername(req, res, username);
+    if (action === 'ping') return await handlePing(req, res, state);
 
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {

@@ -58,6 +58,9 @@
         @media (hover: hover) {
             .avatar:hover .edit { opacity: 1; }
         }
+        .pdot { position: absolute; right: 5px; bottom: 5px; width: 13px; height: 13px; border-radius: 50%; background: #6b6b76; border: 2px solid #17171b; z-index: 2; }
+        .pdot.on { background: #23a55a; }
+        .pdot.idle { background: #f0b232; }
 
         .sess { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid #24242b; padding: 9px 0; }
         .sess:first-child { border-top: none; }
@@ -86,9 +89,13 @@
         .fava { position: relative; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%; overflow: visible; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
         .fava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
         .fava .dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #6b6b76; border: 2px solid #17171b; }
+        .fava .dot.on { background: #23a55a; }
+        .fava .dot.idle { background: #f0b232; }
         .finfo { flex: 1; min-width: 0; }
         .finfo strong { display: block; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .finfo span { font-size: 11.5px; color: #8b8b96; }
+        .finfo span.on { color: #23a55a; }
+        .finfo span.idle { color: #f0b232; }
         .frow .facts { display: flex; gap: 5px; }
         .frow .facts button { width: 26px; height: 26px; margin: 0; padding: 0; border-radius: 50%; font-size: 12px; line-height: 1; display: flex; align-items: center; justify-content: center; background: #24242b; color: #c9c9d4; }
         .frow .facts button:hover { background: #2f2f38; }
@@ -142,6 +149,7 @@
                 <img id="avatar-img" alt="Profile photo" class="hidden">
                 <span id="avatar-initial">?</span>
                 <span class="edit">Edit</span>
+                <span class="pdot on" id="self-presence" title="Online"></span>
             </button>
             <div class="dash-me">
                 <div class="nameline">
@@ -202,6 +210,47 @@
         let drag = null;
         const P = 320;
         const $ = (id) => document.getElementById(id);
+        const IDLE_AFTER = 5 * 60 * 1000;
+        const PING_EVERY = 25 * 1000;
+        const PRESENCE_LABEL = { online: 'Online', idle: 'Idle', offline: 'Offline' };
+        let lastTouch = Date.now();
+        let presenceTimer = null;
+        let friendsTimer = null;
+
+        function presenceClass(s) {
+            return s === 'online' ? 'on' : s === 'idle' ? 'idle' : '';
+        }
+
+        function setSelfPresence(status) {
+            const dot = $('self-presence');
+            dot.className = 'pdot ' + presenceClass(status);
+            dot.title = PRESENCE_LABEL[status];
+        }
+
+        async function heartbeat() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            const state = Date.now() - lastTouch >= IDLE_AFTER ? 'idle' : 'online';
+            setSelfPresence(state);
+            try {
+                await post({ action: 'ping', state }, token);
+            } catch {}
+        }
+
+        function noteActivity() {
+            const wasIdle = Date.now() - lastTouch >= IDLE_AFTER;
+            lastTouch = Date.now();
+            if (wasIdle) heartbeat();
+        }
+
+        function startPresence() {
+            lastTouch = Date.now();
+            heartbeat();
+            clearInterval(presenceTimer);
+            presenceTimer = setInterval(heartbeat, PING_EVERY);
+            clearInterval(friendsTimer);
+            friendsTimer = setInterval(() => loadFriends(true), 30 * 1000);
+        }
 
         function loggedIn(token, email) {
             localStorage.setItem('token', token);
@@ -265,6 +314,7 @@
             setAvatar(null);
             loadSessions();
             loadFriends();
+            startPresence();
         }
 
         function renderSessions(list) {
@@ -377,15 +427,19 @@
         let friendData = { friends: [], incoming: [], outgoing: [] };
         let friendTab = 'all';
 
-        async function loadFriends() {
+        async function loadFriends(quiet) {
             let out;
             try {
                 out = await post({ action: 'friends' }, localStorage.getItem('token'));
             } catch {
-                return friendMsg('Network error — could not load friends.');
+                if (!quiet) friendMsg('Network error — could not load friends.');
+                return;
             }
             if (out.res.status === 401) return clearAuth();
-            if (!out.res.ok) return friendMsg(out.data.error || 'Could not load friends.');
+            if (!out.res.ok) {
+                if (!quiet) friendMsg(out.data.error || 'Could not load friends.');
+                return;
+            }
             renderFriends(out.data);
         }
 
@@ -453,7 +507,7 @@
                 av.append(img);
             }
             const dot = document.createElement('i');
-            dot.className = 'dot';
+            dot.className = 'dot ' + presenceClass(u.status);
             av.append(dot);
 
             const info = document.createElement('div');
@@ -462,7 +516,8 @@
             name.textContent = u.username ? '@' + u.username : u.email;
             if (u.username) name.title = u.email;
             const note = document.createElement('span');
-            note.textContent = status;
+            note.textContent = status || PRESENCE_LABEL[u.status] || 'Offline';
+            note.className = presenceClass(u.status);
             info.append(name, note);
 
             const facts = document.createElement('div');
@@ -484,12 +539,16 @@
         function renderAllFriends() {
             const box = $('f-pane-all');
             box.textContent = '';
-            friendData.friends.forEach((u) => {
-                box.append(friendRow(u, 'Offline', [
-                    { label: '✕', title: 'Remove friend', onclick: () => removeFriend(u.id) }
-                ]));
-            });
-            emptyNote(box, 'No friends yet — add someone by email.');
+            const rank = { online: 0, idle: 1, offline: 2 };
+            [...friendData.friends]
+                .sort((a, b) => (rank[a.status || 'offline'] - rank[b.status || 'offline'])
+                    || (a.username || a.email).localeCompare(b.username || b.email))
+                .forEach((u) => {
+                    box.append(friendRow(u, null, [
+                        { label: '✕', title: 'Remove friend', onclick: () => removeFriend(u.id) }
+                    ]));
+                });
+            emptyNote(box, 'No friends yet — add someone by email or @username.');
         }
 
         function renderPending() {
@@ -813,6 +872,11 @@
             friendMsg('Friend request sent.', true);
             loadFriends();
         };
+
+        ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'].forEach((ev) => {
+            window.addEventListener(ev, noteActivity, { passive: true });
+        });
+        window.addEventListener('focus', noteActivity);
 
         if (localStorage.getItem('token')) showDash();
     </script>
