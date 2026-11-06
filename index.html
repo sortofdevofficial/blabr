@@ -36,7 +36,7 @@
         #msg { color: #ff6b6b; text-align: center; font-size: 13px; margin: 8px 0 0; min-height: 18px; }
 
         .dash-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; padding-right: 86px; }
-        .dash-me { min-width: 0; }
+        .dash-me { position: relative; min-width: 0; }
         .nameline { display: flex; align-items: center; gap: 6px; }
         #uname { font-size: 17px; font-weight: 600; letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .link { width: auto; margin: 0; padding: 2px 6px; background: none; color: #8b8b96; font-size: 11px; font-weight: 600; border-radius: 6px; }
@@ -61,6 +61,18 @@
         .pdot { position: absolute; right: 5px; bottom: 5px; width: 13px; height: 13px; border-radius: 50%; background: #6b6b76; border: 2px solid #17171b; z-index: 2; }
         .pdot.on { background: #23a55a; }
         .pdot.idle { background: #f0b232; }
+        .pdot.dnd { background: #da373c; }
+        .pdot-mini { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #6b6b76; flex: 0 0 auto; }
+        .pdot-mini.on { background: #23a55a; }
+        .pdot-mini.idle { background: #f0b232; }
+        .pdot-mini.dnd { background: #da373c; }
+        .status-chip { display: inline-flex; align-items: center; gap: 6px; width: auto; margin: 5px 0 0; padding: 2px 9px 2px 7px; background: #202027; color: #c9c9d4; font-size: 11px; font-weight: 600; border-radius: 999px; }
+        .status-chip:hover { background: #2a2a32; }
+        .status-menu { position: absolute; top: calc(100% + 6px); left: 0; width: 186px; padding: 5px; background: #1f1f25; border: 1px solid #2b2b33; border-radius: 10px; box-shadow: 0 14px 30px rgba(0, 0, 0, .55); z-index: 10; }
+        .status-menu button { display: flex; align-items: center; gap: 8px; width: 100%; margin: 0; padding: 7px 8px; background: none; color: #c9c9d4; font-size: 12.5px; font-weight: 500; border-radius: 7px; text-align: left; }
+        .status-menu button:hover { background: #2a2a32; }
+        .status-menu button.on { color: #fff; }
+        .status-menu button.on::after { content: '✓'; margin-left: auto; color: #8b8b96; font-size: 11px; }
 
         .sess { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid #24242b; padding: 9px 0; }
         .sess:first-child { border-top: none; }
@@ -91,11 +103,13 @@
         .fava .dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #6b6b76; border: 2px solid #17171b; }
         .fava .dot.on { background: #23a55a; }
         .fava .dot.idle { background: #f0b232; }
+        .fava .dot.dnd { background: #da373c; }
         .finfo { flex: 1; min-width: 0; }
         .finfo strong { display: block; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .finfo span { font-size: 11.5px; color: #8b8b96; }
         .finfo span.on { color: #23a55a; }
         .finfo span.idle { color: #f0b232; }
+        .finfo span.dnd { color: #da373c; }
         .frow .facts { display: flex; gap: 5px; }
         .frow .facts button { width: 26px; height: 26px; margin: 0; padding: 0; border-radius: 50%; font-size: 12px; line-height: 1; display: flex; align-items: center; justify-content: center; background: #24242b; color: #c9c9d4; }
         .frow .facts button:hover { background: #2f2f38; }
@@ -157,6 +171,14 @@
                     <button type="button" class="link" id="uname-edit">Edit</button>
                 </div>
                 <p id="who"></p>
+                <button type="button" class="status-chip" id="status-btn" aria-haspopup="menu" aria-expanded="false">
+                    <i class="pdot-mini on" id="status-dot"></i><span id="status-label">Online</span>
+                </button>
+                <div class="status-menu hidden" id="status-menu" role="menu">
+                    <button type="button" data-st="online" role="menuitem"><i class="pdot-mini on"></i>Online</button>
+                    <button type="button" data-st="idle" role="menuitem"><i class="pdot-mini idle"></i>Idle</button>
+                    <button type="button" data-st="dnd" role="menuitem"><i class="pdot-mini dnd"></i>Do Not Disturb</button>
+                </div>
             </div>
         </div>
         <form id="uname-form" class="hidden">
@@ -210,46 +232,45 @@
         let drag = null;
         const P = 320;
         const $ = (id) => document.getElementById(id);
-        const IDLE_AFTER = 5 * 60 * 1000;
-        const PING_EVERY = 25 * 1000;
-        const PRESENCE_LABEL = { online: 'Online', idle: 'Idle', offline: 'Offline' };
-        let lastTouch = Date.now();
+        const PING_EVERY = 60 * 1000;
+        const PRESENCE_LABEL = { online: 'Online', idle: 'Idle', dnd: 'Do Not Disturb', offline: 'Offline' };
+        const MY_STATUS = ['online', 'idle', 'dnd'];
+        let myStatus = localStorage.getItem('status') || 'online';
         let presenceTimer = null;
         let friendsTimer = null;
 
         function presenceClass(s) {
-            return s === 'online' ? 'on' : s === 'idle' ? 'idle' : '';
+            return s === 'online' ? 'on' : s === 'idle' ? 'idle' : s === 'dnd' ? 'dnd' : '';
         }
 
-        function setSelfPresence(status) {
-            const dot = $('self-presence');
-            dot.className = 'pdot ' + presenceClass(status);
-            dot.title = PRESENCE_LABEL[status];
+        function setMyStatus(status, persist) {
+            myStatus = MY_STATUS.includes(status) ? status : 'online';
+            if (persist) localStorage.setItem('status', myStatus);
+            const cls = presenceClass(myStatus);
+            const self = $('self-presence');
+            self.className = 'pdot ' + cls;
+            self.title = PRESENCE_LABEL[myStatus];
+            $('status-dot').className = 'pdot-mini ' + cls;
+            $('status-label').textContent = PRESENCE_LABEL[myStatus];
+            document.querySelectorAll('#status-menu button').forEach((b) => {
+                b.classList.toggle('on', b.dataset.st === myStatus);
+            });
         }
 
         async function heartbeat() {
-            const token = localStorage.getItem('token');
-            if (!token) return;
-            const state = Date.now() - lastTouch >= IDLE_AFTER ? 'idle' : 'online';
-            setSelfPresence(state);
+            if (!localStorage.getItem('token')) return;
             try {
-                await post({ action: 'ping', state }, token);
+                await post({ action: 'ping' }, localStorage.getItem('token'));
             } catch {}
         }
 
-        function noteActivity() {
-            const wasIdle = Date.now() - lastTouch >= IDLE_AFTER;
-            lastTouch = Date.now();
-            if (wasIdle) heartbeat();
-        }
-
         function startPresence() {
-            lastTouch = Date.now();
+            setMyStatus(myStatus, true);
             heartbeat();
             clearInterval(presenceTimer);
             presenceTimer = setInterval(heartbeat, PING_EVERY);
             clearInterval(friendsTimer);
-            friendsTimer = setInterval(() => loadFriends(true), 30 * 1000);
+            friendsTimer = setInterval(() => loadFriends(true), PING_EVERY);
         }
 
         function loggedIn(token, email) {
@@ -373,6 +394,7 @@
                 return;
             }
             if (out.data.email) setIdent(out.data.email, out.data.username);
+            if (out.data.status) setMyStatus(out.data.status, true);
             setAvatar(out.data.avatar);
             renderSessions(out.data.sessions);
         }
@@ -389,6 +411,38 @@
             if (out.data.current) return clearAuth();
             loadSessions();
         }
+
+        $('status-btn').onclick = (e) => {
+            e.stopPropagation();
+            const menu = $('status-menu');
+            menu.classList.toggle('hidden');
+            $('status-btn').setAttribute('aria-expanded', String(!menu.classList.contains('hidden')));
+        };
+
+        $('status-menu').querySelectorAll('button').forEach((b) => {
+            b.onclick = async () => {
+                $('status-menu').classList.add('hidden');
+                $('status-btn').setAttribute('aria-expanded', 'false');
+                const prev = myStatus;
+                setMyStatus(b.dataset.st, true);
+                let out;
+                try {
+                    out = await post({ action: 'status', status: b.dataset.st }, localStorage.getItem('token'));
+                } catch {
+                    return setMyStatus(prev, true);
+                }
+                if (out.res.status === 401) return clearAuth();
+                if (!out.res.ok) return setMyStatus(prev, true);
+                setMyStatus(out.data.status, true);
+            };
+        });
+
+        document.addEventListener('click', (e) => {
+            if ($('status-menu').classList.contains('hidden')) return;
+            if (e.target.closest('#status-menu') || e.target.closest('#status-btn')) return;
+            $('status-menu').classList.add('hidden');
+            $('status-btn').setAttribute('aria-expanded', 'false');
+        });
 
         $('uname-edit').onclick = () => {
             $('uname-input').value = ($('uname').textContent || '').replace(/^@/, '');
@@ -539,7 +593,7 @@
         function renderAllFriends() {
             const box = $('f-pane-all');
             box.textContent = '';
-            const rank = { online: 0, idle: 1, offline: 2 };
+            const rank = { online: 0, dnd: 1, idle: 2, offline: 3 };
             [...friendData.friends]
                 .sort((a, b) => (rank[a.status || 'offline'] - rank[b.status || 'offline'])
                     || (a.username || a.email).localeCompare(b.username || b.email))
@@ -759,7 +813,12 @@
         document.addEventListener('contextmenu', (e) => e.preventDefault());
         $('crop-zoom').oninput = (e) => setZoom(Number(e.target.value));
         $('crop').onclick = (e) => { if (e.target === $('crop')) closeCrop(); };
-        document.onkeydown = (e) => { if (e.key === 'Escape' && !$('crop').classList.contains('hidden')) closeCrop(); };
+        document.onkeydown = (e) => {
+            if (e.key !== 'Escape') return;
+            if (!$('crop').classList.contains('hidden')) return closeCrop();
+            $('status-menu').classList.add('hidden');
+            $('status-btn').setAttribute('aria-expanded', 'false');
+        };
 
         const canvas = $('crop-canvas');
         canvas.onpointerdown = (e) => {
@@ -872,11 +931,6 @@
             friendMsg('Friend request sent.', true);
             loadFriends();
         };
-
-        ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'].forEach((ev) => {
-            window.addEventListener(ev, noteActivity, { passive: true });
-        });
-        window.addEventListener('focus', noteActivity);
 
         if (localStorage.getItem('token')) showDash();
     </script>

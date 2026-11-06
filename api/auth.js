@@ -16,9 +16,11 @@ const SESSION_TTL_SECONDS = 7 * 24 * 3600;
 const PRESENCE_TTL_SECONDS = 10 * 60;
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
+const STATUSES = ['online', 'idle', 'dnd'];
+
 function presenceOf(user) {
   if (!user.o || nowSeconds() - user.o > PRESENCE_TTL_SECONDS) return 'offline';
-  return user.i ? 'idle' : 'online';
+  return STATUSES[user.i] || 'online';
 }
 
 function dbHint(err) {
@@ -34,7 +36,11 @@ async function connectDB() {
   if (db.conn) return db.conn;
   if (!db.promise) {
     db.promise = mongoose
-      .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000 })
+      .connect(process.env.MONGO_URI, {
+        serverSelectionTimeoutMS: 8000,
+        maxPoolSize: 5,
+        maxIdleTimeMS: 60000
+      })
       .then((m) => { db.conn = m; return m; })
       .catch((err) => { db.promise = null; throw err; });
   }
@@ -243,7 +249,7 @@ async function createSession(req, userId) {
     d: deviceLabel((req.headers && req.headers['user-agent']) || ''),
     s: now
   });
-  await User.updateOne({ _id: userId }, { o: now, i: 0 });
+  await User.updateOne({ _id: userId }, { o: now });
   return sid;
 }
 
@@ -358,7 +364,7 @@ async function handleSessions(req, res) {
 
   await Session.updateOne({ _id: auth.sid }, { s: nowSeconds() });
 
-  const user = await User.findById(auth.userId).select('e n av').lean();
+  const user = await User.findById(auth.userId).select('e n av i').lean();
   if (!user) return res.status(401).json({ error: 'Account not found.', expired: true });
 
   let username = user.n;
@@ -370,6 +376,7 @@ async function handleSessions(req, res) {
   return res.status(200).json({
     email: user.e,
     username,
+    status: STATUSES[user.i] || 'online',
     avatar: user.av || null,
     sessions: sessions.map((s) => ({
       id: s._id,
@@ -555,13 +562,23 @@ async function handleUsername(req, res, raw) {
   return res.status(200).json({ username: name });
 }
 
-async function handlePing(req, res, state) {
+async function handlePing(req, res) {
   const auth = await requireLiveSession(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
 
-  const idle = state === 'idle';
-  await User.updateOne({ _id: auth.userId }, { o: nowSeconds(), i: idle ? 1 : 0 });
-  return res.status(200).json({ status: idle ? 'idle' : 'online' });
+  await User.updateOne({ _id: auth.userId }, { o: nowSeconds() });
+  return res.status(200).json({ ok: true });
+}
+
+async function handleStatus(req, res, status) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const index = STATUSES.indexOf(status);
+  if (index < 0) return res.status(400).json({ error: 'Pick online, idle or dnd.' });
+
+  await User.updateOne({ _id: auth.userId }, { o: nowSeconds(), i: index });
+  return res.status(200).json({ status });
 }
 
 async function handleRevoke(req, res, id) {
@@ -575,7 +592,7 @@ async function handleRevoke(req, res, id) {
   if (!result.deletedCount) return res.status(404).json({ error: 'Session not found.' });
 
   const left = await Session.countDocuments({ u: auth.userId });
-  if (!left) await User.updateOne({ _id: auth.userId }, { o: 0, i: 0 });
+  if (!left) await User.updateOne({ _id: auth.userId }, { o: 0 });
 
   return res.status(200).json({ message: 'Logged out.', current: target === auth.sid });
 }
@@ -589,7 +606,7 @@ module.exports = async function handler(req, res) {
     }
 
     await connectDB();
-    const { action, email, password, otp, id, image, accept, username, state } = body;
+    const { action, email, password, otp, id, image, accept, username, status } = body;
 
     if (action === 'register') {
       if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
@@ -635,7 +652,8 @@ module.exports = async function handler(req, res) {
     if (action === 'respond') return await handleFriendRespond(req, res, id, !!accept);
     if (action === 'remove') return await handleFriendRemove(req, res, id);
     if (action === 'username') return await handleUsername(req, res, username);
-    if (action === 'ping') return await handlePing(req, res, state);
+    if (action === 'ping') return await handlePing(req, res);
+    if (action === 'status') return await handleStatus(req, res, status);
 
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {
