@@ -26,11 +26,6 @@ async function connectDB() {
   return db.promise;
 }
 
-const Counter = mongoose.models.Counter || mongoose.model('Counter', new mongoose.Schema({
-  _id: String,
-  seq: { type: Number, default: 0 }
-}, { versionKey: false }));
-
 const userSchema = new mongoose.Schema({
   _id: { type: Number, required: true },
   e: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -40,9 +35,17 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 
-async function nextUserId() {
-  const counter = await Counter.findByIdAndUpdate('user', { $inc: { seq: 1 } }, { new: true, upsert: true });
-  return counter.seq;
+async function createUser(email, hash) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const last = await User.findOne().sort({ _id: -1 }).select('_id').lean();
+    try {
+      return await User.create({ _id: (last ? last._id : 0) + 1, e: email, p: hash });
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+      if (err.keyPattern && err.keyPattern.e) return null;
+    }
+  }
+  throw new Error('Could not allocate a user id. Please try again.');
 }
 
 module.exports = async function handler(req, res) {
@@ -60,8 +63,9 @@ module.exports = async function handler(req, res) {
     if (action === 'register') {
       if (await User.findOne({ e: email })) return res.status(400).json({ error: 'Email already registered.' });
       const p = await bcrypt.hash(password, 10);
-      await User.create({ _id: await nextUserId(), e: email, p });
-      return res.status(201).json({ message: 'Account created!' });
+      const user = await createUser(email, p);
+      if (!user) return res.status(400).json({ error: 'Email already registered.' });
+      return res.status(201).json({ message: 'Account created!', id: user._id });
     }
 
     if (action === 'login') {
