@@ -55,7 +55,10 @@ module.exports = async function handler(req, res) {
       if (!user || !(await bcrypt.compare(password, user.password))) {
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
-      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+      if (!process.env.JWT_SECRET) {
+        return res.status(500).json({ error: 'JWT_SECRET is not set. Add it in Vercel → Project Settings → Environment Variables, then redeploy.' });
+      }
+      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
       return res.status(200).json({ token, email: user.email });
     }
     res.status(400).json({ error: 'Invalid action' });
