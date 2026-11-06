@@ -60,7 +60,7 @@ module.exports = async function handler(req, res) {
     if (action === 'register') {
       if (await User.findOne({ e: email })) return res.status(400).json({ error: 'Email already registered.' });
       const p = await bcrypt.hash(password, 10);
-      await User.create({ i: await nextUserId(), e: email, p });
+      await User.create({ _id: await nextUserId(), e: email, p });
       return res.status(201).json({ message: 'Account created!' });
     }
 
@@ -72,8 +72,8 @@ module.exports = async function handler(req, res) {
       if (!process.env.JWT_SECRET) {
         return res.status(500).json({ error: 'JWT_SECRET is not set. Add it in Vercel → Project Settings → Environment Variables, then redeploy.' });
       }
-      const token = jwt.sign({ userId: user.i }, process.env.JWT_SECRET, { expiresIn: '7d' });
-      return res.status(200).json({ token, email: user.e, id: user.i });
+      const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      return res.status(200).json({ token, email: user.e, id: user._id });
     }
     res.status(400).json({ error: 'Invalid action' });
   } catch (err) {
