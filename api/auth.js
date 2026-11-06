@@ -56,6 +56,7 @@ const userSchema = new mongoose.Schema({
   c: { type: Number, default: nowSeconds },
   o: Number,
   i: Number,
+  b: String,
   av: String
 }, { versionKey: false });
 
@@ -76,7 +77,7 @@ const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 async function migrateLegacyPending(email) {
   const raw = await User.collection.findOne({ e: email });
-  if (!raw || !raw.o) return false;
+  if (!raw || typeof raw.o !== 'string' || !raw.x) return false;
   await Pending.updateOne(
     { _id: email },
     { p: raw.p, o: raw.o, x: raw.x || 0, a: raw.a || 0 },
@@ -88,13 +89,50 @@ async function migrateLegacyPending(email) {
 
 const sessionSchema = new mongoose.Schema({
   _id: String,
-  u: { type: Number, required: true, index: true },
+  u: { type: Number, index: true },
   i: String,
   d: String,
   s: Number
 }, { versionKey: false });
 
 const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
+
+const sessionKey = (userId, sid) => `${userId}:${sid}`;
+const sidOf = (id) => {
+  const key = String(id || '');
+  const at = key.indexOf(':');
+  return at === -1 ? key : key.slice(at + 1);
+};
+const sessionRange = (userId) => ({ $gte: `${userId}:`, $lt: `${userId};` });
+
+async function liveSession(userId, sid) {
+  if (!sid) return null;
+  const key = sessionKey(userId, sid);
+  const own = await Session.findById(key).lean();
+  if (own) return own;
+
+  const legacy = await Session.findOne({ _id: sid, u: userId }).lean();
+  if (!legacy) return null;
+  try {
+    await Session.create({ _id: key, i: legacy.i, d: legacy.d, s: legacy.s });
+    await Session.deleteOne({ _id: sid, u: { $in: [userId, null] } });
+  } catch (err) {
+    if (err.code !== 11000) throw err;
+  }
+  return { ...legacy, _id: key };
+}
+
+const msgSchema = new mongoose.Schema({
+  _id: { type: Number, required: true },
+  a: { type: Number, required: true },
+  b: { type: Number, required: true },
+  m: { type: String, required: true },
+  t: { type: Number, default: nowSeconds }
+}, { versionKey: false });
+
+msgSchema.index({ a: 1, b: 1, t: -1 });
+
+const Msg = mongoose.models.Msg || mongoose.model('Msg', msgSchema, 'msgs');
 
 const friendSchema = new mongoose.Schema({
   _id: String,
@@ -148,7 +186,7 @@ async function createUser(fields) {
     const last = await User.findOne({ _id: { $type: 'number' } }).sort({ _id: -1 }).select('_id').lean();
     try {
       const user = await User.create({ _id: (last ? last._id : 0) + 1, ...fields, n: username });
-      await Session.deleteMany({ u: user._id });
+      await Session.deleteMany({ $or: [{ u: user._id }, { _id: sessionRange(user._id) }] });
       return user;
     } catch (err) {
       if (err.code !== 11000) throw err;
@@ -244,8 +282,7 @@ async function createSession(req, userId) {
   const now = nowSeconds();
   const sid = crypto.randomBytes(12).toString('hex');
   await Session.create({
-    _id: sid,
-    u: userId,
+    _id: sessionKey(userId, sid),
     i: clientIp(req),
     d: deviceLabel((req.headers && req.headers['user-agent']) || ''),
     s: now
@@ -359,13 +396,18 @@ async function handleSessions(req, res) {
   await Session.deleteMany({ s: { $lt: nowSeconds() - SESSION_TTL_SECONDS } });
   await Session.collection.updateMany({ c: { $exists: true } }, { $unset: { c: '' } });
 
-  const sessions = await Session.find({ u: auth.userId }).sort({ s: -1 }).lean();
-  const current = sessions.find((s) => s._id === auth.sid);
+  const live = await liveSession(auth.userId, auth.sid);
+  if (!live) return res.status(401).json({ error: 'This device was logged out.', expired: true });
+
+  const sessions = await Session.find({
+    $or: [{ _id: sessionRange(auth.userId) }, { u: auth.userId }]
+  }).sort({ s: -1 }).lean();
+  const current = sessions.find((s) => sidOf(s._id) === auth.sid);
   if (!current) return res.status(401).json({ error: 'This device was logged out.', expired: true });
 
-  await Session.updateOne({ _id: auth.sid }, { s: nowSeconds() });
+  await Session.updateOne({ _id: current._id }, { s: nowSeconds() });
 
-  const user = await User.findById(auth.userId).select('e n av i').lean();
+  const user = await User.findById(auth.userId).select('e n b av i').lean();
   if (!user) return res.status(401).json({ error: 'Account not found.', expired: true });
 
   let username = user.n;
@@ -377,14 +419,15 @@ async function handleSessions(req, res) {
   return res.status(200).json({
     email: user.e,
     username,
+    bio: user.b || '',
     status: STATUSES[user.i] || 'online',
     avatar: user.av || null,
     sessions: sessions.map((s) => ({
-      id: s._id,
+      id: sidOf(s._id),
       ip: s.i,
       device: s.d,
-      last: s._id === auth.sid ? nowSeconds() : s.s,
-      current: s._id === auth.sid
+      last: sidOf(s._id) === auth.sid ? nowSeconds() : s.s,
+      current: sidOf(s._id) === auth.sid
     }))
   });
 }
@@ -396,7 +439,7 @@ async function handleAvatar(req, res, image) {
   const auth = readAuth(req);
   if (!auth || !auth.sid) return res.status(401).json({ error: 'Please log in again.', expired: true });
 
-  const live = await Session.findOne({ _id: auth.sid, u: auth.userId }).select('_id').lean();
+  const live = await liveSession(auth.userId, auth.sid);
   if (!live) return res.status(401).json({ error: 'This device was logged out.', expired: true });
 
   const match = typeof image === 'string' && image.match(/^data:image\/(png|jpe?g|webp);base64,([A-Za-z0-9+/=]+)$/);
@@ -429,7 +472,7 @@ async function handleAvatar(req, res, image) {
 async function requireLiveSession(req) {
   const auth = readAuth(req);
   if (!auth || !auth.sid) return null;
-  const live = await Session.findOne({ _id: auth.sid, u: auth.userId }).select('_id').lean();
+  const live = await liveSession(auth.userId, auth.sid);
   return live ? auth : null;
 }
 
@@ -544,6 +587,107 @@ async function handleFriendRemove(req, res, id) {
   return res.status(200).json({ ok: true });
 }
 
+async function areFriends(x, y) {
+  const doc = await Friend.findOne({ _id: pairKey(x, y), s: 'a' }).select('_id').lean();
+  return !!doc;
+}
+
+const BIO_MAX = 160;
+const MSG_MAX = 2000;
+
+async function handleBio(req, res, raw) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const bio = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim().slice(0, BIO_MAX);
+  if (bio) await User.updateOne({ _id: auth.userId }, { b: bio });
+  else await User.updateOne({ _id: auth.userId }, { $unset: { b: '' } });
+  return res.status(200).json({ bio });
+}
+
+async function targetUser(req, res, id) {
+  const auth = await requireLiveSession(req);
+  if (!auth) {
+    res.status(401).json({ error: 'Please log in again.', expired: true });
+    return null;
+  }
+
+  const other = Number(id);
+  if (!Number.isInteger(other) || other < 1) {
+    res.status(400).json({ error: 'User id required.' });
+    return null;
+  }
+
+  if (other !== auth.userId && !(await areFriends(auth.userId, other))) {
+    res.status(403).json({ error: 'You can only do that with friends.' });
+    return null;
+  }
+
+  const user = await User.findById(other).select('e n b av o i').lean();
+  if (!user) {
+    res.status(404).json({ error: 'Account not found.' });
+    return null;
+  }
+  return { auth, other, user };
+}
+
+function publicUser(user) {
+  return {
+    id: user._id,
+    email: user.e,
+    username: user.n || null,
+    bio: user.b || '',
+    avatar: user.av || null,
+    status: presenceOf(user)
+  };
+}
+
+async function handleProfile(req, res, id) {
+  const found = await targetUser(req, res, id);
+  if (!found) return;
+  return res.status(200).json({ user: publicUser(found.user) });
+}
+
+async function handleMessages(req, res, id) {
+  const found = await targetUser(req, res, id);
+  if (!found) return;
+  const me = found.auth.userId;
+  const other = found.other;
+
+  const docs = await Msg.find({
+    $or: [{ a: me, b: other }, { a: other, b: me }]
+  }).sort({ t: -1 }).limit(50).lean();
+
+  return res.status(200).json({
+    user: publicUser(found.user),
+    messages: docs.reverse().map((m) => ({ id: m._id, mine: m.a === me, text: m.m, t: m.t }))
+  });
+}
+
+async function handleSend(req, res, id, raw) {
+  const found = await targetUser(req, res, id);
+  if (!found) return;
+
+  const text = String(raw == null ? '' : raw).trim();
+  if (!text) return res.status(400).json({ error: 'Message is empty.' });
+  if (text.length > MSG_MAX) return res.status(413).json({ error: 'Messages are limited to 2000 characters.' });
+
+  const me = found.auth.userId;
+  const other = found.other;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const last = await Msg.findOne({ _id: { $type: 'number' } }).sort({ _id: -1 }).select('_id').lean();
+    const t = nowSeconds();
+    try {
+      const doc = await Msg.create({ _id: (last ? last._id : 0) + 1, a: me, b: other, m: text, t });
+      return res.status(200).json({ message: { id: doc._id, mine: true, text, t } });
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+    }
+  }
+  return res.status(500).json({ error: 'Could not save the message. Try again.' });
+}
+
 async function handleUsername(req, res, raw) {
   const auth = await requireLiveSession(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
@@ -591,10 +735,13 @@ async function handleRevoke(req, res, id) {
   const target = id || auth.sid;
   if (!target) return res.status(400).json({ error: 'Session id required.' });
 
-  const result = await Session.deleteOne({ _id: target, u: auth.userId });
-  if (!result.deletedCount) return res.status(404).json({ error: 'Session not found.' });
+  const own = await liveSession(auth.userId, target);
+  if (!own) return res.status(404).json({ error: 'Session not found.' });
+  await Session.deleteOne({ _id: own._id });
 
-  const left = await Session.countDocuments({ u: auth.userId });
+  const left = await Session.countDocuments({
+    $or: [{ _id: sessionRange(auth.userId) }, { u: auth.userId }]
+  });
   if (!left) await User.updateOne({ _id: auth.userId }, { o: 0 });
 
   return res.status(200).json({ message: 'Logged out.', current: target === auth.sid });
@@ -609,7 +756,7 @@ module.exports = async function handler(req, res) {
     }
 
     await connectDB();
-    const { action, email, password, otp, id, image, accept, username, status } = body;
+    const { action, email, password, otp, id, image, accept, username, status, bio, text } = body;
 
     if (action === 'register') {
       if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
@@ -626,13 +773,26 @@ module.exports = async function handler(req, res) {
       const key = normalizeEmail(email);
       await migrateLegacyPending(key);
 
-      const user = await User.findOne({ e: key });
+      let user = await User.findOne({ e: key });
       if (!user) {
-        const pending = await Pending.findById(key).lean();
-        if (pending && (await bcrypt.compare(password, pending.p))) {
-          return res.status(403).json({ error: 'Email not verified. Enter the code we emailed you.', verify: true });
+        let pending = await Pending.findById(key).lean();
+
+        // Older code copied presence heartbeats into `pending` and deleted the account.
+        // A real pending row holds a bcrypt hash in `o` and expires within minutes.
+        if (pending && typeof pending.o !== 'string' && pending.x > nowSeconds() + 86400) {
+          user = await createUser({ e: key, p: pending.p, ...(pending.n ? { n: pending.n } : {}) });
+          if (user) {
+            await Pending.deleteOne({ _id: key });
+            pending = null;
+          }
         }
-        return res.status(401).json({ error: 'Invalid email or password.' });
+
+        if (!user) {
+          if (pending && (await bcrypt.compare(password, pending.p))) {
+            return res.status(403).json({ error: 'Email not verified. Enter the code we emailed you.', verify: true });
+          }
+          return res.status(401).json({ error: 'Invalid email or password.' });
+        }
       }
 
       if (!(await bcrypt.compare(password, user.p))) {
@@ -655,6 +815,10 @@ module.exports = async function handler(req, res) {
     if (action === 'respond') return await handleFriendRespond(req, res, id, !!accept);
     if (action === 'remove') return await handleFriendRemove(req, res, id);
     if (action === 'username') return await handleUsername(req, res, username);
+    if (action === 'bio') return await handleBio(req, res, bio);
+    if (action === 'profile') return await handleProfile(req, res, id);
+    if (action === 'messages') return await handleMessages(req, res, id);
+    if (action === 'send') return await handleSend(req, res, id, text);
     if (action === 'ping') return await handlePing(req, res);
     if (action === 'status') return await handleStatus(req, res, status);
 

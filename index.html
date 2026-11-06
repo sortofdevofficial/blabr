@@ -98,6 +98,7 @@
         .fgroup { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8b8b96; margin: 12px 0 2px; }
         .frow { display: flex; align-items: center; gap: 10px; padding: 7px 8px; margin: 1px -8px 0; border-radius: 8px; }
         .frow:hover { background: #1f1f25; }
+        .frow.chatting { background: #22222a; }
         .fava { position: relative; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%; overflow: visible; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
         .fava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
         .fava .dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #6b6b76; border: 2px solid #17171b; }
@@ -135,6 +136,54 @@
         .modal-actions .ghost { background: #24242b; color: #c9c9d4; }
         .modal-actions .ghost:hover { background: #2f2f38; }
         .file-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
+
+        .bio-row { display: flex; align-items: flex-start; gap: 4px; }
+        .bio-line { flex: 1; min-width: 0; margin: 3px 0 0; color: #c9c9d4; font-size: 12px; line-height: 1.4; word-break: break-word; }
+        .bio-line.empty { color: #6b6b76; font-style: italic; }
+        .bio-row .link { margin-top: 1px; }
+        #bio-form { display: flex; gap: 8px; margin: 10px 0 0; }
+        #bio-form input { flex: 1; min-width: 0; margin: 0; }
+        #bio-form button { width: auto; margin: 0; padding: 0 12px; font-size: 12.5px; }
+        #bio-form button.ghost { background: #24242b; color: #c9c9d4; font-weight: 500; }
+        #bio-form button.ghost:hover { background: #2f2f38; }
+        #bio-msg { color: #ff6b6b; text-align: left; font-size: 12px; margin: 6px 0 0; min-height: 16px; }
+        #bio-msg.ok { color: #3ba55d; }
+
+        .ctx-menu { position: fixed; z-index: 40; width: 172px; padding: 5px; background: #1f1f25; border: 1px solid #2b2b33; border-radius: 10px; box-shadow: 0 14px 30px rgba(0, 0, 0, .55); }
+        .ctx-menu button { display: block; width: 100%; margin: 0; padding: 7px 9px; background: none; color: #c9c9d4; font-size: 12.5px; font-weight: 500; text-align: left; border-radius: 7px; }
+        .ctx-menu button:hover { background: #2a2a32; color: #fff; }
+        .ctx-menu button.danger { color: #ff8a8e; }
+        .ctx-menu button.danger:hover { background: #3a2326; color: #ffa3a7; }
+        .ctx-menu hr { height: 1px; margin: 4px 6px; border: 0; background: #2b2b33; }
+
+        .confirm-text { margin: -4px 0 18px; color: #c9c9d4; font-size: 13px; line-height: 1.5; }
+        #confirm-ok.danger { background: #da373c; }
+        #confirm-ok.danger:hover { background: #eb4a4f; }
+
+        .profile-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .pava { position: relative; width: 56px; height: 56px; flex: 0 0 auto; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 600; }
+        .pava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .profile-card h2 { margin: 0; padding: 0; font-size: 17px; }
+        .profile-status { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; color: #8b8b96; font-size: 12px; }
+        .profile-bio { margin: 0 0 10px; min-height: 18px; color: #c9c9d4; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+        .profile-bio.empty { color: #6b6b76; font-style: italic; }
+        .profile-email { margin: 0 0 16px; color: #6b6b76; font-size: 11.5px; word-break: break-all; }
+        .modal-actions .danger-ghost { background: #3a2326; color: #ff8a8e; }
+        .modal-actions .danger-ghost:hover { background: #48292c; }
+
+        .chat-card { max-width: 420px; display: flex; flex-direction: column; max-height: min(78vh, 640px); }
+        .chat-head { display: flex; align-items: center; gap: 10px; padding-right: 32px; margin-bottom: 10px; }
+        .chat-head h2 { margin: 0; padding: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-status { display: flex; align-items: center; gap: 5px; margin: 2px 0 0; color: #8b8b96; font-size: 11.5px; }
+        .chat-log { flex: 1 1 auto; min-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 6px 2px 10px; }
+        .msg { align-self: flex-start; max-width: 78%; padding: 7px 10px; border-radius: 12px 12px 12px 4px; background: #24242b; color: #f2f2f4; font-size: 13px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+        .msg.mine { align-self: flex-end; border-radius: 12px 12px 4px 12px; background: #6366f1; }
+        .msg time { display: block; margin-top: 3px; font-size: 10px; opacity: .65; }
+        .chat-empty { margin: auto; color: #6b6b76; font-size: 12.5px; text-align: center; }
+        #chat-form { display: flex; gap: 8px; margin: 0; }
+        #chat-form input { flex: 1; min-width: 0; margin: 0; }
+        #chat-form button { width: auto; margin: 0; padding: 0 14px; font-size: 12.5px; }
+        #chat-msg { margin: 6px 0 0; min-height: 15px; font-size: 12px; color: #ff6b6b; text-align: left; }
     </style>
 </head>
 <body>
@@ -171,6 +220,10 @@
                     <button type="button" class="link" id="uname-edit">Edit</button>
                 </div>
                 <p id="who"></p>
+                <div class="bio-row">
+                    <p id="bio" class="bio-line empty">No bio yet</p>
+                    <button type="button" class="link" id="bio-edit">Add bio</button>
+                </div>
                 <button type="button" class="status-chip" id="status-btn" aria-haspopup="menu" aria-expanded="false">
                     <i class="pdot-mini on" id="status-dot"></i><span id="status-label">Online</span>
                 </button>
@@ -187,10 +240,17 @@
             <button type="button" class="ghost" id="uname-cancel">Cancel</button>
         </form>
         <p id="uname-msg"></p>
+        <form id="bio-form" class="hidden">
+            <input id="bio-input" maxlength="160" placeholder="A short bio" autocomplete="off">
+            <button type="submit">Save</button>
+            <button type="button" class="ghost" id="bio-cancel">Cancel</button>
+        </form>
+        <p id="bio-msg"></p>
         <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="file-input">
         <h3>Active logins</h3>
         <div id="sessions"></div>
         <h3>Friends</h3>
+        <p class="fhint">Right-click a friend to open their profile or message them.</p>
         <div class="ftabs" role="tablist">
             <button type="button" data-tab="all" class="on">All<span class="count" id="f-c-all">0</span></button>
             <button type="button" data-tab="pending">Pending<span class="count" id="f-c-pending">0</span></button>
@@ -206,7 +266,7 @@
                 <button type="submit" id="friend-add">Send request</button>
             </form>
         </div>
-        <button onclick="logout()">Logout</button>
+        <button type="button" id="logout-btn">Logout</button>
     </div>
 
     <div class="modal hidden" id="crop">
@@ -225,6 +285,65 @@
         </div>
     </div>
 
+    <div class="modal hidden" id="confirm">
+        <div class="modal-card">
+            <h2 id="confirm-title">Are you sure?</h2>
+            <p id="confirm-text" class="confirm-text"></p>
+            <div class="modal-actions">
+                <button type="button" class="ghost" id="confirm-cancel">Cancel</button>
+                <button type="button" id="confirm-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="profile">
+        <div class="modal-card profile-card">
+            <button type="button" class="modal-close" id="profile-close" aria-label="Close">×</button>
+            <div class="profile-top">
+                <div class="pava" id="profile-ava">?</div>
+                <div>
+                    <h2 id="profile-name">@</h2>
+                    <p class="profile-status"><i class="pdot-mini" id="profile-dot"></i><span id="profile-status">Offline</span></p>
+                </div>
+            </div>
+            <p class="profile-bio empty" id="profile-bio">No bio yet</p>
+            <p class="profile-email" id="profile-email"></p>
+            <div class="modal-actions">
+                <button type="button" id="profile-message">Message</button>
+                <button type="button" class="danger-ghost" id="profile-remove">Remove friend</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="chat">
+        <div class="modal-card chat-card">
+            <button type="button" class="modal-close" id="chat-close" aria-label="Close">×</button>
+            <div class="chat-head">
+                <div class="fava" id="chat-ava">
+                    <span id="chat-initial">?</span>
+                    <i class="dot" id="chat-dot"></i>
+                </div>
+                <div>
+                    <h2 id="chat-name">@</h2>
+                    <p class="chat-status"><span id="chat-status">Offline</span></p>
+                </div>
+            </div>
+            <div class="chat-log" id="chat-log"></div>
+            <form id="chat-form">
+                <input id="chat-input" maxlength="2000" placeholder="Message…" autocomplete="off">
+                <button type="submit" id="chat-send">Send</button>
+            </form>
+            <p id="chat-msg"></p>
+        </div>
+    </div>
+
+    <div class="ctx-menu hidden" id="ctx-menu">
+        <button type="button" data-ctx="profile">View profile</button>
+        <button type="button" data-ctx="message">Message</button>
+        <hr>
+        <button type="button" data-ctx="remove" class="danger">Remove friend</button>
+    </div>
+
     <script>
         let isLogin = true;
         let pending = null;
@@ -237,6 +356,10 @@
         const MY_STATUS = ['online', 'idle', 'dnd'];
         let myStatus = localStorage.getItem('status') || 'online';
         let friendsTimer = null;
+        let confirmResolve = null;
+        let ctxUser = null;
+        let profileUser = null;
+        let chat = null;
 
         function presenceClass(s) {
             return s === 'online' ? 'on' : s === 'idle' ? 'idle' : s === 'dnd' ? 'dnd' : '';
@@ -272,6 +395,83 @@
             localStorage.clear();
             location.reload();
         }
+
+        function askConfirm(opts) {
+            const o = opts || {};
+            if (!$('confirm').classList.contains('hidden')) closeConfirm(false);
+            $('confirm-title').textContent = o.title || 'Are you sure?';
+            $('confirm-text').textContent = o.text || '';
+            $('confirm-ok').textContent = o.ok || 'Confirm';
+            $('confirm-ok').className = o.danger ? 'danger' : '';
+            $('confirm').classList.remove('hidden');
+            setTimeout(() => $('confirm-ok').focus(), 0);
+            return new Promise((resolve) => { confirmResolve = resolve; });
+        }
+
+        function closeConfirm(result) {
+            if ($('confirm').classList.contains('hidden')) return;
+            $('confirm').classList.add('hidden');
+            const fn = confirmResolve;
+            confirmResolve = null;
+            if (fn) fn(result);
+        }
+
+        $('confirm-ok').onclick = () => closeConfirm(true);
+        $('confirm-cancel').onclick = () => closeConfirm(false);
+        $('confirm').onclick = (e) => { if (e.target === $('confirm')) closeConfirm(false); };
+
+        function handleOf(u) {
+            return u.username ? '@' + u.username : (u.email || 'this person');
+        }
+
+        function setBio(text) {
+            const el = $('bio');
+            el.textContent = text || 'No bio yet';
+            el.classList.toggle('empty', !text);
+            el.title = text || '';
+            $('bio-edit').textContent = text ? 'Edit' : 'Add bio';
+        }
+
+        function bioMsg(text, ok) {
+            const el = $('bio-msg');
+            el.textContent = text || '';
+            el.classList.toggle('ok', !!ok);
+        }
+
+        function closeBio() {
+            $('bio-form').classList.add('hidden');
+            $('bio-input').value = '';
+        }
+
+        $('bio-edit').onclick = () => {
+            $('bio-input').value = $('bio').classList.contains('empty') ? '' : $('bio').textContent;
+            $('bio-form').classList.remove('hidden');
+            bioMsg('');
+            $('bio-input').focus();
+        };
+
+        $('bio-cancel').onclick = () => {
+            closeBio();
+            bioMsg('');
+        };
+
+        $('bio-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const bio = $('bio-input').value.trim();
+            let out;
+            try {
+                out = await post({ action: 'bio', bio }, localStorage.getItem('token'));
+            } catch {
+                return bioMsg('Network error — try again.');
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) return bioMsg(out.data.error || 'Could not save your bio.');
+
+            setBio(out.data.bio);
+            localStorage.setItem('bio', out.data.bio || '');
+            closeBio();
+            bioMsg('Bio saved.', true);
+        };
 
         function ago(t) {
             const d = Math.floor(Date.now() / 1000) - t;
@@ -322,6 +522,7 @@
             $('dash').classList.remove('hidden');
             setIdent();
             setAvatar(null);
+            setBio(localStorage.getItem('bio') || '');
             loadSessions();
             loadFriends();
             startPresence();
@@ -362,7 +563,15 @@
 
                 const btn = document.createElement('button');
                 btn.textContent = 'Log out';
-                btn.onclick = () => revokeSession(s.id);
+                btn.onclick = async () => {
+                    const ok = await askConfirm({
+                        title: 'Log out device?',
+                        text: `Log out ${s.device}${s.current ? ' (this device)' : ''}? You will need your password to log back in there.`,
+                        ok: 'Log out',
+                        danger: true
+                    });
+                    if (ok) revokeSession(s.id);
+                };
 
                 row.append(info, btn);
                 box.append(row);
@@ -384,6 +593,10 @@
             }
             if (out.data.email) setIdent(out.data.email, out.data.username);
             if (out.data.status) setMyStatus(out.data.status, true);
+            if (typeof out.data.bio === 'string') {
+                localStorage.setItem('bio', out.data.bio);
+                setBio(out.data.bio);
+            }
             setAvatar(out.data.avatar);
             renderSessions(out.data.sessions);
         }
@@ -452,6 +665,17 @@
             const username = $('uname-input').value.trim();
             if (!username) return unameMsg('Enter a username.');
 
+            const current = (localStorage.getItem('username') || '').toLowerCase();
+            if (username.toLowerCase() !== current) {
+                const ok = await askConfirm({
+                    title: 'Change username?',
+                    text: `Switch ${current ? 'from @' + current + ' ' : ''}to @${username}? Your old name becomes free for anyone to claim and friends will see the new name.`,
+                    ok: 'Change username',
+                    danger: true
+                });
+                if (!ok) return;
+            }
+
             let out;
             try {
                 out = await post({ action: 'username', username }, localStorage.getItem('token'));
@@ -510,6 +734,13 @@
             };
             $('f-c-all').textContent = friendData.friends.length;
             $('f-c-pending').textContent = friendData.incoming.length + friendData.outgoing.length;
+            if (chat) {
+                const u = friendData.friends.find((f) => f.id === chat.id);
+                if (u) {
+                    chat.user = { ...chat.user, ...u };
+                    setChatHeader(chat.user);
+                }
+            }
             renderFriendTab();
         }
 
@@ -533,9 +764,15 @@
             box.append(p);
         }
 
-        function friendRow(u, status, actions) {
+        function friendRow(u, status, actions, opts) {
             const row = document.createElement('div');
-            row.className = 'frow';
+            row.className = 'frow' + (chat && chat.id === u.id ? ' chatting' : '');
+
+            row.oncontextmenu = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!(opts && opts.noContext)) openCtx(u, e.clientX, e.clientY);
+            };
 
             const av = document.createElement('div');
             av.className = 'fava';
@@ -588,7 +825,9 @@
                     || (a.username || a.email).localeCompare(b.username || b.email))
                 .forEach((u) => {
                     box.append(friendRow(u, null, [
-                        { label: '✕', title: 'Remove friend', onclick: () => removeFriend(u.id) }
+                        { label: '✕', title: 'Remove friend', onclick: () => removeFriend(u.id, {
+                            text: `Remove ${handleOf(u)}? You'll need to send a new request to add them back.`
+                        }) }
                     ]));
                 });
             emptyNote(box, 'No friends yet — add someone by email or @username.');
@@ -603,15 +842,19 @@
                     box.append(friendRow(u, 'Wants to be friends', [
                         { label: '✓', cls: 'ok', title: 'Accept', onclick: () => respondFriend(u.id, true) },
                         { label: '✕', cls: 'no', title: 'Deny', onclick: () => respondFriend(u.id, false) }
-                    ]));
+                    ], { noContext: true }));
                 });
             }
             if (friendData.outgoing.length) {
                 box.append(groupLabel(`Outgoing — ${friendData.outgoing.length}`));
                 friendData.outgoing.forEach((u) => {
                     box.append(friendRow(u, `Requested ${ago(u.t)}`, [
-                        { label: '✕', title: 'Cancel request', onclick: () => removeFriend(u.id) }
-                    ]));
+                        { label: '✕', title: 'Cancel request', onclick: () => removeFriend(u.id, {
+                            title: 'Cancel request?',
+                            text: `Cancel your friend request to ${handleOf(u)}?`,
+                            ok: 'Cancel request'
+                        }) }
+                    ], { noContext: true }));
                 });
             }
             emptyNote(box, 'No pending requests.');
@@ -630,7 +873,16 @@
             loadFriends();
         }
 
-        async function removeFriend(id) {
+        async function removeFriend(id, opts) {
+            const o = opts || {};
+            const ok = await askConfirm({
+                title: o.title || 'Remove friend?',
+                text: o.text || 'Remove this friend? You will need to send a new request to add them back.',
+                ok: o.ok || 'Remove',
+                danger: true
+            });
+            if (!ok) return;
+
             let out;
             try {
                 out = await post({ action: 'remove', id }, localStorage.getItem('token'));
@@ -640,13 +892,241 @@
             if (out.res.status === 401) return clearAuth();
             if (!out.res.ok) return friendMsg(out.data.error || 'Could not remove.');
             friendMsg('');
+            if (chat && chat.id === id) closeChat();
+            if (profileUser && profileUser.id === id) $('profile').classList.add('hidden');
             loadFriends();
         }
+
+        $('logout-btn').onclick = async () => {
+            const ok = await askConfirm({
+                title: 'Log out?',
+                text: 'This device will be signed out. You will need your email and password to log back in.',
+                ok: 'Log out',
+                danger: true
+            });
+            if (ok) logout();
+        };
 
         async function logout() {
             await post({ action: 'revoke' }, localStorage.getItem('token')).catch(() => {});
             clearAuth();
         }
+
+        function closeCtx() {
+            $('ctx-menu').classList.add('hidden');
+            ctxUser = null;
+        }
+
+        function openCtx(u, x, y) {
+            ctxUser = u;
+            const menu = $('ctx-menu');
+            menu.classList.remove('hidden');
+            const w = menu.offsetWidth || 172;
+            const h = menu.offsetHeight || 120;
+            menu.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+            menu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+        }
+
+        $('ctx-menu').querySelectorAll('button').forEach((b) => {
+            b.onclick = () => {
+                const u = ctxUser;
+                const act = b.dataset.ctx;
+                closeCtx();
+                if (!u) return;
+                if (act === 'profile') return openProfile(u);
+                if (act === 'message') return openChat(u);
+                if (act === 'remove') {
+                    removeFriend(u.id, { text: `Remove ${handleOf(u)}? You'll need to send a new request to add them back.` });
+                }
+            };
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!$('ctx-menu').classList.contains('hidden') && !e.target.closest('#ctx-menu')) closeCtx();
+        });
+
+        function paintProfile(u) {
+            profileUser = u;
+            $('profile-name').textContent = handleOf(u);
+            $('profile-email').textContent = u.email || '';
+
+            const ava = $('profile-ava');
+            ava.textContent = '';
+            const initial = document.createElement('span');
+            initial.textContent = ((u.username || u.email || '?')[0] || '?').toUpperCase();
+            ava.append(initial);
+            if (u.avatar) {
+                const img = document.createElement('img');
+                img.alt = '';
+                img.onerror = () => img.remove();
+                img.src = u.avatar;
+                ava.append(img);
+            }
+
+            const st = u.status || 'offline';
+            $('profile-dot').className = 'pdot-mini ' + presenceClass(st);
+            $('profile-status').textContent = PRESENCE_LABEL[st] || 'Offline';
+            $('profile-bio').textContent = u.bio || 'No bio yet';
+            $('profile-bio').classList.toggle('empty', !u.bio);
+        }
+
+        async function openProfile(u) {
+            paintProfile(u);
+            $('profile').classList.remove('hidden');
+            let out;
+            try {
+                out = await post({ action: 'profile', id: u.id }, localStorage.getItem('token'));
+            } catch {
+                return;
+            }
+            if (out.res.status === 401) return clearAuth();
+            if (out.res.ok && out.data.user) paintProfile(out.data.user);
+        }
+
+        $('profile-close').onclick = () => $('profile').classList.add('hidden');
+        $('profile').onclick = (e) => { if (e.target === $('profile')) $('profile').classList.add('hidden'); };
+        $('profile-message').onclick = () => {
+            if (!profileUser) return;
+            const u = profileUser;
+            $('profile').classList.add('hidden');
+            openChat(u);
+        };
+        $('profile-remove').onclick = () => {
+            if (!profileUser) return;
+            removeFriend(profileUser.id, { text: `Remove ${handleOf(profileUser)}? You'll need to send a new request to add them back.` });
+        };
+
+        const CHAT_EVERY = 10 * 1000;
+
+        function fmtTime(t) {
+            return new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        }
+
+        function setChatHeader(u) {
+            $('chat-name').textContent = u.username ? '@' + u.username : (u.email || 'Chat');
+            $('chat-initial').textContent = ((u.username || u.email || '?')[0] || '?').toUpperCase();
+            $('chat-dot').className = 'dot ' + presenceClass(u.status);
+            $('chat-status').textContent = PRESENCE_LABEL[u.status] || 'Offline';
+            const ava = $('chat-ava');
+            ava.querySelectorAll('img').forEach((i) => i.remove());
+            if (u.avatar) {
+                const img = document.createElement('img');
+                img.alt = '';
+                img.onerror = () => img.remove();
+                img.src = u.avatar;
+                ava.insertBefore(img, $('chat-dot'));
+            }
+        }
+
+        function appendMessage(m) {
+            const bubble = document.createElement('div');
+            bubble.className = 'msg' + (m.mine ? ' mine' : '');
+            const text = document.createElement('span');
+            text.textContent = m.text;
+            const when = document.createElement('time');
+            when.textContent = fmtTime(m.t);
+            bubble.append(text, when);
+            $('chat-log').append(bubble);
+        }
+
+        function renderChat(data, force) {
+            if (!chat) return;
+            if (data.user) {
+                chat.user = data.user;
+                setChatHeader(chat.user);
+            }
+
+            const box = $('chat-log');
+            const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+            box.textContent = '';
+            if (!data.messages || !data.messages.length) {
+                const p = document.createElement('p');
+                p.className = 'chat-empty';
+                p.textContent = 'No messages yet — say hi.';
+                box.append(p);
+            } else {
+                data.messages.forEach(appendMessage);
+            }
+            if (force || atBottom) box.scrollTop = box.scrollHeight;
+        }
+
+        async function loadChat(quiet, force) {
+            if (!chat) return;
+            const id = chat.id;
+            let out;
+            try {
+                out = await post({ action: 'messages', id }, localStorage.getItem('token'));
+            } catch {
+                if (!quiet) $('chat-msg').textContent = 'Network error — could not load messages.';
+                return;
+            }
+            if (!chat || chat.id !== id) return;
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) {
+                if (!quiet) $('chat-msg').textContent = out.data.error || 'Could not load messages.';
+                return;
+            }
+            $('chat-msg').textContent = '';
+            renderChat(out.data, force);
+        }
+
+        async function openChat(u) {
+            closeCtx();
+            $('profile').classList.add('hidden');
+            if (chat && chat.timer) clearInterval(chat.timer);
+            chat = { id: u.id, user: u, timer: null };
+            setChatHeader(u);
+            $('chat-log').textContent = '';
+            $('chat-msg').textContent = '';
+            $('chat-input').value = '';
+            $('chat').classList.remove('hidden');
+            renderFriendTab();
+            await loadChat(true, true);
+            if (!chat) return;
+            chat.timer = setInterval(() => loadChat(true, false), CHAT_EVERY);
+            $('chat-input').focus();
+        }
+
+        function closeChat() {
+            if (chat && chat.timer) clearInterval(chat.timer);
+            chat = null;
+            $('chat').classList.add('hidden');
+            renderFriendTab();
+        }
+
+        $('chat-close').onclick = closeChat;
+        $('chat').onclick = (e) => { if (e.target === $('chat')) closeChat(); };
+
+        $('chat-form').onsubmit = async (e) => {
+            e.preventDefault();
+            if (!chat) return;
+            const input = $('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const btn = $('chat-send');
+            btn.disabled = true;
+            $('chat-msg').textContent = '';
+
+            let out;
+            try {
+                out = await post({ action: 'send', id: chat.id, text }, localStorage.getItem('token'));
+            } catch {
+                btn.disabled = false;
+                $('chat-msg').textContent = 'Network error — message not sent.';
+                return;
+            }
+            btn.disabled = false;
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) {
+                $('chat-msg').textContent = out.data.error || 'Could not send the message.';
+                return;
+            }
+
+            input.value = '';
+            await loadChat(true, true);
+            input.focus();
+        };
 
         function showOtp(note) {
             $('form').classList.add('hidden');
@@ -804,6 +1284,10 @@
         $('crop').onclick = (e) => { if (e.target === $('crop')) closeCrop(); };
         document.onkeydown = (e) => {
             if (e.key !== 'Escape') return;
+            if (!$('confirm').classList.contains('hidden')) return closeConfirm(false);
+            if (!$('ctx-menu').classList.contains('hidden')) return closeCtx();
+            if (!$('chat').classList.contains('hidden')) return closeChat();
+            if (!$('profile').classList.contains('hidden')) return $('profile').classList.add('hidden');
             if (!$('crop').classList.contains('hidden')) return closeCrop();
             $('status-menu').classList.add('hidden');
             $('status-btn').setAttribute('aria-expanded', 'false');
