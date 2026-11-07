@@ -103,7 +103,7 @@
                 <div id="f-pane-all"></div>
                 <div id="f-pane-pending" class="hidden"></div>
                 <div id="f-pane-add" class="hidden">
-                    <p class="fhint">You can add friends with their email or @username — it's that simple.</p>
+                    <p class="fhint">You can add friends with their email or @username.</p>
                     <form id="friend-form">
                         <input type="text" id="friend-who" placeholder="Email or @username" autocomplete="off" spellcheck="false" required>
                         <button type="submit" id="friend-add">Send request</button>
@@ -162,7 +162,7 @@
             <form id="channel-create-form">
                 <label for="new-channel-name" style="font-size:12px; color:#8b8b96; text-transform:uppercase; font-weight:700;">Channel Name</label>
                 <input id="new-channel-name" placeholder="new-channel" maxlength="40" required autocomplete="off">
-                <label for="new-channel-cat" style="font-size:12px; color:#8b8b96; text-transform:uppercase; font-weight:700; margin-top:8px; display:block;">Category (Optional)</label>
+                <label for="new-channel-cat" style="font-size:12px; color:#8b8b96; text-transform:uppercase; font-weight:700; margin-top:8px; display:block;">Category</label>
                 <input id="new-channel-cat" placeholder="TEXT CHANNELS" maxlength="40" autocomplete="off" value="TEXT CHANNELS">
                 <p id="channel-modal-msg" style="color:#ff6b6b; font-size:12px; min-height:16px; margin:4px 0;"></p>
                 <div class="modal-actions" style="margin-top:12px;">
@@ -173,54 +173,20 @@
         </div>
     </div>
 
-    <div class="modal hidden" id="server-dialog" role="dialog" aria-modal="true" aria-labelledby="server-dialog-title">
+    <div class="modal hidden" id="server-dialog" role="dialog" aria-modal="true">
         <div class="modal-card">
-            <button type="button" class="modal-close" id="server-dialog-close" aria-label="Close server dialog">×</button>
+            <button type="button" class="modal-close" id="server-dialog-close" aria-label="Close">×</button>
             <h2 id="server-dialog-title">Create a server</h2>
             <form id="server-create-form" class="hidden">
-                <p class="fhint">A little space for your group. One shared chat to start.</p>
+                <p class="fhint">A little space for your group.</p>
                 <label for="server-name">Server name</label>
                 <input id="server-name" maxlength="60" placeholder="Your group name" autocomplete="off" required>
                 <button type="submit" id="server-create-submit">Create server</button>
             </form>
-            <div id="server-invite-panel" class="hidden">
-                <p class="fhint">Anyone with this link can sign in and join. Replace it to stop new joins through the old link.</p>
-                <label for="server-invite-link">Invite link</label>
-                <input id="server-invite-link" readonly>
-                <div class="modal-actions">
-                    <button type="button" id="server-invite-copy">Copy link</button>
-                    <button type="button" class="ghost" id="server-invite-rotate">Replace link</button>
-                </div>
-                <div id="server-invite-history"></div>
-            </div>
-            <p id="server-created" class="fhint hidden"></p>
-            <div id="server-members-list" class="hidden"></div>
             <div id="server-discover-panel" class="hidden">
                 <div id="server-discover-list"></div>
-                <button type="button" class="ghost hidden" id="server-discover-more">Load more</button>
-            </div>
-            <div id="server-join-panel" class="hidden">
-                <p id="server-join-name"></p>
-                <p class="fhint" id="server-join-info"></p>
-                <button type="button" id="server-join-submit">Join server</button>
             </div>
             <p id="server-error" role="status"></p>
-        </div>
-    </div>
-
-    <div class="modal hidden" id="crop">
-        <div class="modal-card">
-            <button type="button" class="modal-close" id="crop-close" aria-label="Close">×</button>
-            <h2>Change profile photo</h2>
-            <div class="crop-stage">
-                <canvas id="crop-canvas" width="320" height="320"></canvas>
-            </div>
-            <input type="range" id="crop-zoom" min="1" max="3" step="0.01" value="1">
-            <p id="crop-msg"></p>
-            <div class="modal-actions">
-                <button type="button" class="ghost" id="crop-cancel">Cancel</button>
-                <button type="button" id="crop-save">Save</button>
-            </div>
         </div>
     </div>
 
@@ -255,7 +221,6 @@
     </div>
 
     <div class="toast-stack" id="toast-stack"></div>
-
     <div class="ctx-menu hidden" id="ctx-menu">
         <button type="button" data-ctx="profile">View profile</button>
         <button type="button" data-ctx="message">Message</button>
@@ -263,11 +228,8 @@
         <button type="button" data-ctx="remove" class="danger">Remove friend</button>
     </div>
 
-    <div class="ctx-menu hidden" id="msg-ctx-menu">
-        <button type="button" data-mctx="copy">Copy text</button>
-        <button type="button" data-mctx="delete" class="danger hidden" id="msg-ctx-delete">Delete</button>
-    </div>
-
-    <script src="/app.js"></script>
+    <script src="/api.js"></script>
+    <script src="/auth-ui.js"></script>
+    <script src="/chat-ui.js"></script>
 </body>
 </html>

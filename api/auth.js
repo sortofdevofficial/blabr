@@ -7,6 +7,7 @@ const nodemailer = require('nodemailer');
 mongoose.set('bufferCommands', false);
 
 const db = globalThis.__pratrDb || (globalThis.__pratrDb = { conn: null, promise: null });
+let mailer = null;
 
 const OTP_TTL_SECONDS = 600;
 const SESSION_TTL_SECONDS = 7 * 24 * 3600;
@@ -316,18 +317,35 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === 'messages') {
-      const match = kind === 'server' ? { s: Number(id), ch: channelId || `${id}:general` } : { $or: [{ a: auth.userId, b: Number(id) }, { a: Number(id), b: auth.userId }] };
+      const isServer = kind === 'server';
+      const match = isServer ? { s: Number(id), ch: channelId || `${id}:general` } : { $or: [{ a: auth.userId, b: Number(id) }, { a: Number(id), b: auth.userId }] };
       const msgs = await Msg.find({ ...match, d: { $ne: 1 } }).sort({ t: -1 }).limit(50).lean();
-      const server = kind === 'server' ? await Server.findById(Number(id)).lean() : null;
-      const members = server ? await User.find({ _id: { $in: server.m || [] } }).select('n av o i').lean() : [];
+      
+      let server = null;
+      let targetUserObj = null;
+      let members = [];
+
+      if (isServer) {
+        server = await Server.findById(Number(id)).lean();
+        if (server) {
+          members = await User.find({ _id: { $in: server.m || [] } }).select('n av o i').lean();
+        }
+      } else {
+        const otherId = Number(id);
+        const u = await User.findById(otherId).select('e n b av o i').lean();
+        if (u) targetUserObj = { id: u._id, email: u.e, username: u.n, avatar: u.av, status: presenceOf(u), bio: u.b || '' };
+      }
+
       const joins = server ? await Join.find({ s: server._id }).lean() : [];
       const byUser = new Map(joins.map(j => [j.u, j]));
 
       return res.status(200).json({
         ...(server ? {
           server: { id: server._id, name: server.n, owner: server.o, count: server.m.length },
-          members: members.io || members.map(m => ({ id: m._id, username: m.n, avatar: m.av, status: presenceOf(m), duration: (byUser.get(m._id)?.duration || 0) }))
-        } : {}),
+          members: members.map(m => ({ id: m._id, username: m.n, avatar: m.av, status: presenceOf(m), duration: (byUser.get(m._id)?.duration || 0) }))
+        } : {
+          user: targetUserObj
+        }),
         messages: msgs.reverse().map(m => ({ id: m._id, mine: m.a === auth.userId, text: m.m, t: m.t, sender: { id: m.a, username: 'Member' }, mentions: [] }))
       });
     }
