@@ -69,6 +69,7 @@
       <footer class="user-panel">
         <div class="ava sm" id="me-ava"><span id="me-initial">?</span><i class="dot on"></i></div>
         <div class="me-info"><strong id="me-name">…</strong><span id="me-email"></span></div>
+        <button class="icon-btn accent" id="edit-btn" title="Edit profile" aria-label="Edit profile"><svg viewBox="0 0 24 24" class="ic"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
         <button class="icon-btn" id="logout-btn" title="Log out" aria-label="Log out"><svg viewBox="0 0 24 24" class="ic"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
       </footer>
     </aside>
@@ -85,6 +86,11 @@
       </header>
       <div class="scroll">
         <div class="home-wrap">
+          <div class="panel profile-card">
+            <div class="ava lg" id="hp-ava"></div>
+            <div class="meta"><strong id="hp-name"></strong><small id="hp-email"></small></div>
+            <button class="btn primary" id="hp-edit" type="button">Edit profile</button>
+          </div>
           <div class="panel">
             <h3>Add a friend</h3>
             <p class="hint">Enter their username or email. Friends can message you directly.</p>
@@ -136,6 +142,7 @@
 <div class="menu hidden" id="server-menu">
   <button data-act="invite"><svg viewBox="0 0 24 24" class="ic"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Invite people</button>
   <button data-act="channel" id="menu-channel"><svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>Create channel</button>
+  <button data-act="settings" id="menu-settings"><svg viewBox="0 0 24 24" class="ic"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Server settings</button>
   <button data-act="leave" class="danger" id="menu-leave"><svg viewBox="0 0 24 24" class="ic"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Leave server</button>
 </div>
 
@@ -183,9 +190,23 @@
 <div class="modal hidden" id="modal-profile" role="dialog" aria-modal="true">
   <div class="modal-card">
     <button class="modal-x" data-close aria-label="Close">×</button>
-    <h2>Edit profile</h2><p class="hint">Change the username other people see.</p>
+    <h2>Edit profile</h2><p class="hint">Your photo and username, as others see them.</p>
+    <div class="up"><button type="button" class="ava lg" id="pf-ava" title="Change photo"></button><input type="file" id="pf-file" accept="image/*" hidden>
+      <div class="up-btns"><button type="button" class="btn ghost" id="pf-pick">Upload photo</button><button type="button" class="linkbtn" id="pf-clear">Remove</button></div></div>
     <form id="profile-form"><label class="field"><span>Username</span><input id="profile-name" maxlength="20" autocomplete="off" spellcheck="false" required></label>
     <p class="msg-err" id="profile-msg"></p>
+    <div class="modal-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary" type="submit">Save</button></div></form>
+  </div>
+</div>
+
+<div class="modal hidden" id="modal-sv" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <button class="modal-x" data-close aria-label="Close">×</button>
+    <h2>Server settings</h2><p class="hint">Change the server icon and name.</p>
+    <div class="up"><button type="button" class="ava lg" id="sv-ava" title="Change icon"></button><input type="file" id="sv-file" accept="image/*" hidden>
+      <div class="up-btns"><button type="button" class="btn ghost" id="sv-pick">Upload icon</button><button type="button" class="linkbtn" id="sv-clear">Remove</button></div></div>
+    <form id="sv-form"><label class="field"><span>Server name</span><input id="sv-name" maxlength="60" autocomplete="off" required></label>
+    <p class="msg-err" id="sv-msg"></p>
     <div class="modal-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary" type="submit">Save</button></div></form>
   </div>
 </div>

@@ -19,7 +19,8 @@ const S = {
 
 /* ---------- helpers ---------- */
 const color = (s) => { let x = 0; for (const c of String(s)) x = (x * 31 + c.charCodeAt(0)) % 360; return `hsl(${x} 55% 48%)`; };
-function avatar(name, cls = '') { const a = h('div', 'ava ' + cls, (name || '?')[0].toUpperCase()); a.style.background = color(name); return a; }
+const bg = (url, name) => url ? `center/cover url("${url}")` : color(name || '?');
+function avatar(name, cls = '', url = '') { const a = h('div', 'ava ' + cls, url ? '' : (name || '?')[0].toUpperCase()); a.style.background = bg(url, name); return a; }
 const isOwner = () => !!(S.me && S.server && S.server.owner === S.me.id);
 const curChannel = () => S.channels.find(c => c.id === S.channelId) || null;
 const fmtTime = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -118,10 +119,11 @@ $('logout-btn').onclick = async () => { await post({ action: 'logout' }); clearS
 /* ---------- boot ---------- */
 function setMe(u) {
     const name = u.username || 'user';
-    $('me-name').textContent = name;
-    $('me-email').textContent = u.email || '';
-    $('me-initial').textContent = name[0].toUpperCase();
-    $('me-ava').style.background = color(name);
+    const letter = u.avatar ? '' : name[0].toUpperCase();
+    $('me-name').textContent = $('hp-name').textContent = name;
+    $('me-email').textContent = $('hp-email').textContent = u.email || '';
+    $('me-initial').textContent = $('hp-ava').textContent = letter;
+    $('me-ava').style.background = $('hp-ava').style.background = bg(u.avatar, name);
 }
 
 async function boot() {
@@ -253,8 +255,10 @@ function renderRail() {
     const box = $('rail-servers');
     box.textContent = '';
     S.servers.forEach(s => {
-        const b = h('button', 'rail-btn' + (S.server && S.server.id === s.id ? ' active' : ''), s.name[0].toUpperCase());
+        const b = h('button', 'rail-btn' + (S.server && S.server.id === s.id ? ' active' : ''), s.icon ? '' : s.name[0].toUpperCase());
+        if (s.icon) b.style.background = bg(s.icon);
         b.title = s.name;
+        b._ctx = () => s.owner === S.me?.id ? [['Server settings', () => openServer(s.id).then(openServerSettings)]] : [];
         b.onclick = () => openServer(s.id);
         box.append(b);
     });
@@ -273,7 +277,7 @@ function renderSide() {
     if (!S.friends.length) dms.append(h('div', 'side-empty', 'Add a friend to start chatting.'));
     S.friends.forEach(u => {
         const b = h('button', 'dm-item' + (S.view === 'dm' && S.dm && S.dm.id === u.id ? ' active' : ''));
-        b.append(avatar(u.username || u.email, 'sm'), h('span', '', u.username || u.email));
+        b.append(avatar(u.username || u.email, 'sm', u.avatar), h('span', '', u.username || u.email));
         b.onclick = () => openDM(u);
         b._ctx = userItems(u);
         dms.append(b);
@@ -325,7 +329,7 @@ function renderFriends() {
         const btn = h('button', 'btn ghost', 'Message');
         btn.onclick = () => openDM(u);
         c._ctx = userItems(u);
-        c.append(avatar(u.username || u.email), meta, btn);
+        c.append(avatar(u.username || u.email, '', u.avatar), meta, btn);
         grid.append(c);
     });
 }
@@ -345,7 +349,7 @@ function renderMain() {
         $('chat-sub').textContent = ch ? S.server.name : '';
     } else {
         const n = S.dm.username || S.dm.email;
-        icon.append(avatar(n, 'sm'));
+        icon.append(avatar(n, 'sm', S.dm.avatar));
         $('chat-name').textContent = n;
         $('chat-sub').textContent = '';
     }
@@ -384,7 +388,7 @@ function renderMembers() {
     S.members.forEach(m => {
         const r = h('div', 'mem');
         r._ctx = userItems(m);
-        r.append(avatar(m.username, 'sm'), h('span', '', m.username || 'Member'));
+        r.append(avatar(m.username, 'sm', m.avatar), h('span', '', m.username || 'Member'));
         if (S.server && m.id === S.server.owner) r.append(h('em', 'badge', 'OWNER'));
         box.append(r);
     });
@@ -417,7 +421,7 @@ function renderMessages(list, force) {
         const same = prev && prev.author.id === m.author.id && m.t - prev.t < 300;
         const row = h('div', 'msg' + (same ? '' : ' first'));
         const gutter = h('div', 'gutter');
-        if (same) gutter.textContent = fmtTime(m.t); else gutter.append(avatar(m.author.username));
+        if (same) gutter.textContent = fmtTime(m.t); else gutter.append(avatar(m.author.username, '', m.author.avatar));
         const body = h('div', 'body');
         if (!same) {
             const head = h('div', 'head');
@@ -563,6 +567,7 @@ $('server-menu-btn').onclick = (e) => {
     const menu = $('server-menu');
     if (!menu.classList.contains('hidden')) return menu.classList.add('hidden');
     $('menu-channel').classList.toggle('hidden', !isOwner());
+    $('menu-settings').classList.toggle('hidden', !isOwner());
     $('menu-leave').classList.toggle('hidden', isOwner());
     const r = $('server-menu-btn').getBoundingClientRect();
     menu.style.left = Math.max(8, Math.min(r.right - 220, window.innerWidth - 228)) + 'px';
@@ -576,6 +581,7 @@ $('server-menu').onclick = async (e) => {
     const act = b.dataset.act;
     if (act === 'invite') openInvite();
     if (act === 'channel') openChannelModal();
+    if (act === 'settings') openServerSettings();
     if (act === 'leave' && S.server && confirm(`Leave ${S.server.name}?`)) {
         const out = await post({ action: 'server-leave', id: S.server.id });
         if (!out.res.ok) return toast(out.data.error || 'Could not leave.', true);
@@ -586,16 +592,64 @@ $('server-menu').onclick = async (e) => {
 window.addEventListener('hashchange', () => { if (S.token && S.me) handleInvite(); });
 
 /* ---------- profile ---------- */
+const pend = {}; // pending image URL per upload widget (pf = profile, sv = server)
+const paint = (k, name) => { const el = $(k + '-ava'); el.textContent = pend[k] ? '' : (name || '?')[0].toUpperCase(); el.style.background = bg(pend[k], name); };
+
+async function uploadImage(file, kind) {
+    const sig = await post({ action: 'upload-sign', kind });
+    if (!sig.res.ok) { toast(sig.data.error || 'Upload unavailable.', true); return ''; }
+    const { cloud, key, timestamp, signature, folder } = sig.data, fd = new FormData();
+    Object.entries({ file, api_key: key, timestamp, signature, folder }).forEach(([k, v]) => fd.append(k, v));
+    try {
+        const r = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/image/upload`, { method: 'POST', body: fd });
+        if (!r.ok) throw 0;
+        return (await r.json()).secure_url.replace('/upload/', '/upload/c_fill,g_auto,w_256,h_256,f_auto,q_auto/');
+    } catch { toast('Upload failed.', true); return ''; }
+}
+function wireUpload(k, kind, nameOf) {
+    $(k + '-pick').onclick = $(k + '-ava').onclick = () => $(k + '-file').click();
+    $(k + '-clear').onclick = () => { pend[k] = ''; paint(k, nameOf()); };
+    $(k + '-file').onchange = async (e) => {
+        const f = e.target.files[0]; e.target.value = '';
+        if (!f) return;
+        if (f.size > 5e6) return toast('Image must be under 5 MB.', true);
+        const label = $(k + '-pick'), old = label.textContent;
+        label.textContent = 'Uploading…'; label.disabled = true;
+        const url = await uploadImage(f, kind);
+        label.textContent = old; label.disabled = false;
+        if (url) { pend[k] = url; paint(k, nameOf()); }
+    };
+}
+wireUpload('pf', 'avatars', () => $('profile-name').value);
+wireUpload('sv', 'servers', () => $('sv-name').value);
+$('profile-name').oninput = () => paint('pf', $('profile-name').value);
+$('sv-name').oninput = () => paint('sv', $('sv-name').value);
+$('edit-btn').onclick = $('hp-edit').onclick = () => openProfile();
+
 function openProfile() {
     $('profile-msg').textContent = '';
     $('profile-name').value = S.me ? S.me.username : '';
+    pend.pf = S.me?.avatar || ''; paint('pf', $('profile-name').value);
     openModal('modal-profile');
 }
+function openServerSettings() {
+    if (!isOwner()) return;
+    $('sv-msg').textContent = '';
+    $('sv-name').value = S.server.name;
+    pend.sv = S.server.icon || ''; paint('sv', S.server.name);
+    openModal('modal-sv');
+}
+$('sv-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const out = await post({ action: 'server-update', id: S.server.id, name: $('sv-name').value, icon: pend.sv });
+    if (!out.res.ok) { $('sv-msg').textContent = out.data.error || 'Could not save.'; return; }
+    await loadServers(); closeModals(); renderAll(); toast('Server updated.');
+};
 $('profile-form').onsubmit = async (e) => {
     e.preventDefault();
-    const out = await post({ action: 'profile-update', username: $('profile-name').value });
+    const out = await post({ action: 'profile-update', username: $('profile-name').value, avatar: pend.pf });
     if (!out.res.ok) { $('profile-msg').textContent = out.data.error || 'Could not save.'; return; }
-    S.me.username = out.data.username; setMe(S.me);
+    S.me.username = out.data.username; S.me.avatar = out.data.avatar; setMe(S.me);
     closeModals(); toast('Profile updated.');
     loadMessages(true); loadMembers();
 };
@@ -636,7 +690,7 @@ document.addEventListener('keydown', (e) => {
 
 /* ---------- login background: gravity dots ---------- */
 (() => {
-    const cv = $('gravity'), c = cv.getContext('2d'), m = { x: -999, y: -999 }, R = 170, GAP = 32;
+    const cv = $('gravity'), c = cv.getContext('2d'), m = { x: -999, y: -999 }, R = 240, GAP = 30;
     let dots = [], w, ht, dpr;
     const seed = () => {
         dpr = devicePixelRatio || 1; w = innerWidth; ht = innerHeight;
@@ -653,11 +707,12 @@ document.addEventListener('keydown', (e) => {
         c.clearRect(0, 0, w, ht);
         for (const d of dots) {
             const dx = m.x - d.x, dy = m.y - d.y, dist = Math.hypot(dx, dy) || 1, near = Math.max(0, 1 - dist / R);
-            d.vx += near * near * 2.2 * dx / dist + (d.hx - d.x) * 0.04;
-            d.vy += near * near * 2.2 * dy / dist + (d.hy - d.y) * 0.04;
-            d.vx *= 0.84; d.vy *= 0.84; d.x += d.vx; d.y += d.vy;
-            c.fillStyle = `rgba(239,232,218,${0.18 + near * 0.7})`;
-            c.beginPath(); c.arc(d.x, d.y, 1.2 + near * 1.6, 0, 6.283); c.fill();
+            const pull = near * near * 0.09; // spring-like (no 1/dist term), so dots settle instead of jittering
+            d.vx = (d.vx + dx * pull + (d.hx - d.x) * 0.03) * 0.78;
+            d.vy = (d.vy + dy * pull + (d.hy - d.y) * 0.03) * 0.78;
+            d.x += d.vx; d.y += d.vy;
+            c.fillStyle = `rgba(239,232,218,${0.32 + near * 0.68})`;
+            c.beginPath(); c.arc(d.x, d.y, 1.5 + near * 2.2, 0, 6.283); c.fill();
         }
     })();
 })();

@@ -65,6 +65,7 @@ const serverSchema = new mongoose.Schema({
   n: String,
   o: Number,
   m: [Number],
+  ic: String,
   i: { type: String, unique: true }
 }, { versionKey: false });
 const Server = mongoose.models.Server || mongoose.model('Server', serverSchema, 'servers');
@@ -104,6 +105,9 @@ const areFriends = async (x, y) => !!(await Friend.exists({ $or: [{ a: x, b: y }
 
 const isMember = async (serverId, userId) => !!(await Server.exists({ _id: Number(serverId), m: userId }));
 
+const srv = (s) => ({ id: s._id, name: s.n, owner: s.o, count: s.m.length, icon: s.ic || '' });
+const okImg = (u) => u === '' || (typeof u === 'string' && u.startsWith(`https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/`));
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
@@ -111,7 +115,7 @@ module.exports = async function handler(req, res) {
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch {} }
 
     await connectDB();
-    const { action, email, password, otp, id, username, text, kind, name, channelId, category, channelName, code } = body;
+    const { action, email, password, otp, id, username, text, kind, name, channelId, category, channelName, code, avatar, icon } = body;
 
     if (action === 'register') {
       const key = String(email || '').trim().toLowerCase();
@@ -159,16 +163,34 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === 'me') {
-      const me = await User.findById(auth.userId).select('e n').lean();
-      return res.status(200).json({ id: me._id, email: me.e, username: me.n });
+      const me = await User.findById(auth.userId).select('e n av').lean();
+      return res.status(200).json({ id: me._id, email: me.e, username: me.n, avatar: me.av || '' });
     }
 
     if (action === 'profile-update') {
       const uname = String(username || '').trim().slice(0, 20);
       if (!uname) return res.status(400).json({ error: 'Username required.' });
       if (await User.exists({ n: uname, _id: { $ne: auth.userId } })) return res.status(400).json({ error: 'Username taken.' });
-      await User.updateOne({ _id: auth.userId }, { n: uname });
-      return res.status(200).json({ username: uname });
+      if (!okImg(avatar ?? '')) return res.status(400).json({ error: 'Invalid image.' });
+      await User.updateOne({ _id: auth.userId }, { n: uname, av: avatar || '' });
+      return res.status(200).json({ username: uname, avatar: avatar || '' });
+    }
+
+    if (action === 'upload-sign') {
+      const { CLOUDINARY_CLOUD_NAME: cloud, CLOUDINARY_API_KEY: key, CLOUDINARY_API_SECRET: secret } = process.env;
+      if (!cloud || !key || !secret) return res.status(500).json({ error: 'Image uploads are not configured.' });
+      const folder = kind === 'servers' ? 'pratr/servers' : 'pratr/avatars', timestamp = nowSeconds();
+      const signature = crypto.createHash('sha1').update(`folder=${folder}&timestamp=${timestamp}${secret}`).digest('hex');
+      return res.status(200).json({ cloud, key, timestamp, signature, folder });
+    }
+
+    if (action === 'server-update') {
+      const cleanName = String(name || '').trim().slice(0, 60);
+      if (!cleanName) return res.status(400).json({ error: 'Server name required.' });
+      if (!okImg(icon ?? '')) return res.status(400).json({ error: 'Invalid image.' });
+      const server = await Server.findOneAndUpdate({ _id: Number(id), o: auth.userId }, { n: cleanName, ic: icon || '' }, { new: true }).lean();
+      if (!server) return res.status(403).json({ error: 'Only the owner can edit the server.' });
+      return res.status(200).json({ server: srv(server) });
     }
 
     if (action === 'friend-add') {
@@ -178,14 +200,14 @@ module.exports = async function handler(req, res) {
       if (other._id === auth.userId) return res.status(400).json({ error: "You can't add yourself." });
       const [x, y] = [auth.userId, other._id].sort((p, q2) => p - q2);
       await Friend.updateOne({ _id: `${x}:${y}` }, { $setOnInsert: { a: x, b: y, s: 'a' } }, { upsert: true });
-      return res.status(200).json({ friend: { id: other._id, username: other.n, email: other.e } });
+      return res.status(200).json({ friend: { id: other._id, username: other.n, email: other.e, avatar: other.av } });
     }
 
     if (action === 'server-join') {
       const server = await Server.findOne({ i: String(code || '') });
       if (!server) return res.status(404).json({ error: 'Invalid invite.' });
       if (!server.m.includes(auth.userId)) { server.m.push(auth.userId); await server.save(); }
-      return res.status(200).json({ server: { id: server._id, name: server.n, owner: server.o, count: server.m.length } });
+      return res.status(200).json({ server: srv(server) });
     }
 
     if (action === 'friends') {
@@ -196,7 +218,7 @@ module.exports = async function handler(req, res) {
 
     if (action === 'servers') {
       const servers = await Server.find({ m: auth.userId }).lean();
-      return res.status(200).json({ servers: servers.map(s => ({ id: s._id, name: s.n, owner: s.o, count: s.m.length })) });
+      return res.status(200).json({ servers: servers.map(srv) });
     }
 
     if (action === 'server-create') {
@@ -205,7 +227,7 @@ module.exports = async function handler(req, res) {
       const serverId = await nextId(Server);
       const server = await Server.create({ _id: serverId, n: cleanName, o: auth.userId, m: [auth.userId], i: crypto.randomBytes(24).toString('hex') });
       await Channel.create({ _id: await nextId(Channel), s: serverId, n: 'general', cat: 'TEXT CHANNELS' });
-      return res.status(200).json({ server: { id: server._id, name: server.n, owner: server.o, count: server.m.length } });
+      return res.status(200).json({ server: srv(server) });
     }
 
     if (action === 'channels') {
@@ -233,8 +255,8 @@ module.exports = async function handler(req, res) {
     if (action === 'members') {
       const server = await Server.findOne({ _id: Number(id), m: auth.userId }).lean();
       if (!server) return res.status(403).json({ error: 'Not a member.' });
-      const users = await User.find({ _id: { $in: server.m } }).select('n').lean();
-      return res.status(200).json({ owner: server.o, members: users.map(u => ({ id: u._id, username: u.n })) });
+      const users = await User.find({ _id: { $in: server.m } }).select('n av').lean();
+      return res.status(200).json({ owner: server.o, members: users.map(u => ({ id: u._id, username: u.n, avatar: u.av })) });
     }
 
     if (action === 'channel-delete') {
@@ -265,10 +287,10 @@ module.exports = async function handler(req, res) {
         match = { $or: [{ a: auth.userId, b: Number(id) }, { a: Number(id), b: auth.userId }] };
       }
       const msgs = await Msg.find({ ...match, d: { $ne: 1 } }).sort({ _id: -1 }).limit(100).lean();
-      const authors = await User.find({ _id: { $in: [...new Set(msgs.map(m => m.a))] } }).select('n').lean();
-      const names = Object.fromEntries(authors.map(u => [u._id, u.n]));
+      const authors = await User.find({ _id: { $in: [...new Set(msgs.map(m => m.a))] } }).select('n av').lean();
+      const people = Object.fromEntries(authors.map(u => [u._id, u]));
       return res.status(200).json({
-        messages: msgs.reverse().map(m => ({ id: m._id, mine: m.a === auth.userId, text: m.m, t: m.t, author: { id: m.a, username: names[m.a] || 'Unknown' } }))
+        messages: msgs.reverse().map(m => ({ id: m._id, mine: m.a === auth.userId, text: m.m, t: m.t, author: { id: m.a, username: people[m.a]?.n || 'Unknown', avatar: people[m.a]?.av } }))
       });
     }
 
