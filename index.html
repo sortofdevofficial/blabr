@@ -231,6 +231,18 @@
         #server-dialog h2 { overflow-wrap: anywhere; }
         #server-error { font-size: 12px; color: #ff8a8e; min-height: 16px; }
         #server-members-list { max-height: 50dvh; overflow-y: auto; }
+        .head-actions { display: flex; gap: 5px; }
+        #server-invite-history { max-height: 32dvh; overflow-y: auto; margin-top: 12px; font-size: 12px; }
+        .inv-row { border-top: 1px solid #2b2b33; padding: 8px 0; }
+        .inv-row .inv-meta { color: #9a9aa6; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+        .inv-row .inv-joins { color: #c9c9d4; margin-top: 3px; overflow-wrap: anywhere; }
+        .inv-row .inv-active { color: #a7ead0; }
+        #server-discover-list { max-height: 50dvh; overflow-y: auto; }
+        .discover-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid #2b2b33; }
+        .discover-row .finfo { flex: 1; min-width: 0; }
+        .discover-row strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .discover-row span { font-size: 12px; color: #9a9aa6; }
+        .discover-row button { width: auto; margin: 0; padding: 6px 12px; flex-shrink: 0; }
         #server-invite-link { font-size: 12px; }
         #server-join-name { overflow-wrap: anywhere; }
         .mention { color: #dfdfff; background: #6366f140; border-radius: 3px; padding: 0 2px; }
@@ -337,7 +349,7 @@
     <div class="card hidden" id="dash">
         <div class="dash-sidebar">
             <div class="sidebar-scroll">
-                <div class="msgr-list-head"><strong>Servers</strong><button type="button" id="server-create">+ Create</button></div>
+                <div class="msgr-list-head"><strong>Servers</strong><span class="head-actions"><button type="button" id="server-discover">Discover</button><button type="button" id="server-create">+ Create</button></span></div>
                 <div class="msgr-convos" id="dash-servers"></div>
                 <div class="msgr-list-head"><strong>Messages</strong></div>
                 <div class="msgr-convos" id="dash-convos"></div>
@@ -461,8 +473,14 @@
                     <button type="button" id="server-invite-copy">Copy link</button>
                     <button type="button" class="ghost" id="server-invite-rotate">Replace link</button>
                 </div>
+                <div id="server-invite-history"></div>
             </div>
+            <p id="server-created" class="fhint hidden"></p>
             <div id="server-members-list" class="hidden"></div>
+            <div id="server-discover-panel" class="hidden">
+                <div id="server-discover-list"></div>
+                <button type="button" class="ghost hidden" id="server-discover-more">Load more</button>
+            </div>
             <div id="server-join-panel" class="hidden">
                 <p id="server-join-name"></p>
                 <p class="fhint" id="server-join-info"></p>
@@ -1798,9 +1816,10 @@
             const state = { mode, target, code, busy: false, opener: document.activeElement };
             serverDialog = state;
             $('server-error').textContent = '';
-            for (const id of ['server-create-form', 'server-invite-panel', 'server-members-list', 'server-join-panel']) $(id).classList.add('hidden');
+            for (const id of ['server-create-form', 'server-invite-panel', 'server-members-list', 'server-join-panel', 'server-discover-panel', 'server-created']) $(id).classList.add('hidden');
+            $('server-invite-history').textContent = '';
             $('server-dialog').querySelectorAll('button').forEach((b) => { b.disabled = false; });
-            $('server-dialog-title').textContent = { create: 'Create a server', invite: 'Invite your group', members: 'Members', join: 'Server invitation' }[mode];
+            $('server-dialog-title').textContent = { create: 'Create a server', invite: 'Invite your group', members: 'Members', join: 'Server invitation', discover: 'Discover servers' }[mode];
             $('server-dialog').classList.remove('hidden');
             $('server-dialog-close').focus();
             return state;
@@ -1859,6 +1878,34 @@
             loadServers();
             notify('Server created. Use Invite to bring your group in.', 'success');
         };
+        async function renderInviteHistory(state) {
+            const out = await serverRequest(state, { action: 'server-invites', id: state.target.id });
+            if (!out) return;
+            const box = $('server-invite-history');
+            box.textContent = '';
+            out.invites.forEach((inv) => {
+                const row = document.createElement('div');
+                row.className = 'inv-row';
+                const meta = document.createElement('div');
+                meta.className = 'inv-meta';
+                const when = document.createElement('span');
+                when.textContent = 'Created ' + new Date(inv.created * 1000).toLocaleDateString();
+                const status = document.createElement('span');
+                status.textContent = inv.active ? 'Active' : 'Expired' + (inv.expired ? ' ' + new Date(inv.expired * 1000).toLocaleDateString() : '');
+                if (inv.active) status.className = 'inv-active';
+                const count = document.createElement('span');
+                count.textContent = inv.count + (inv.count === 1 ? ' join' : ' joins');
+                meta.append(when, status, count);
+                const joins = document.createElement('div');
+                joins.className = 'inv-joins';
+                joins.textContent = inv.joins.length
+                    ? inv.joins.map((j) => (j.user.username ? '@' + j.user.username : 'Member') + ' · ' + new Date(j.t * 1000).toLocaleDateString()).join(', ')
+                    : 'No joins through this link yet.';
+                row.append(meta, joins);
+                box.append(row);
+            });
+        }
+
         $('server-invite').onclick = async () => {
             if (!chat || chat.kind !== 'server') return;
             const state = openServerDialog('invite', chat.server);
@@ -1866,6 +1913,7 @@
             if (!out) return;
             $('server-invite-link').value = location.origin + '/#invite=' + encodeURIComponent(out.code);
             $('server-invite-panel').classList.remove('hidden');
+            await renderInviteHistory(state);
         };
         $('server-invite-copy').onclick = async () => {
             try { await navigator.clipboard.writeText($('server-invite-link').value); notify('Invite link copied.', 'success'); }
@@ -1877,13 +1925,17 @@
             const ok = await askConfirm({ title: 'Replace invite link?', text: 'The old link will stop working. Existing members stay in the server.', ok: 'Replace' });
             if (!ok || state !== serverDialog) return;
             const out = await serverRequest(state, { action: 'server-invite', id: state.target.id, rotate: true });
-            if (out) $('server-invite-link').value = location.origin + '/#invite=' + encodeURIComponent(out.code);
+            if (!out) return;
+            $('server-invite-link').value = location.origin + '/#invite=' + encodeURIComponent(out.code);
+            await renderInviteHistory(state);
         };
         $('server-members').onclick = async () => {
             if (!chat || chat.kind !== 'server') return;
             const state = openServerDialog('members', chat.server);
             const out = await serverRequest(state, { action: 'server-members', id: state.target.id });
             if (!out) return;
+            $('server-created').textContent = 'Created ' + new Date(out.server.created * 1000).toLocaleDateString();
+            $('server-created').classList.remove('hidden');
             const box = $('server-members-list');
             box.textContent = '';
             out.members.forEach((u) => {
@@ -1895,11 +1947,68 @@
                 name.textContent = u.username ? '@' + u.username : 'Member';
                 const status = document.createElement('span');
                 status.textContent = u.id === out.server.owner ? 'Owner' : (PRESENCE_LABEL[u.status] || 'Member');
+                const via = document.createElement('span');
+                via.textContent = u.id === out.server.owner ? 'Created this server'
+                    : u.via && u.via.inviter ? 'Invited by @' + u.via.inviter
+                    : u.via && u.via.discovery ? 'Joined via discovery'
+                    : u.via && u.via.t ? 'Joined ' + new Date(u.via.t * 1000).toLocaleDateString()
+                    : '';
                 info.append(name, status);
+                if (via.textContent) info.append(via);
                 row.append(convAvatar(u), info);
                 box.append(row);
             });
             box.classList.remove('hidden');
+        };
+
+        async function loadDiscover(state, before, append) {
+            const out = await serverRequest(state, { action: 'server-discover', ...(before ? { before } : {}) });
+            if (!out) return;
+            const box = $('server-discover-list');
+            if (!append) box.textContent = '';
+            if (!append && !out.servers.length) {
+                const empty = document.createElement('p');
+                empty.className = 'fhint';
+                empty.textContent = 'No servers yet. Create the first one!';
+                box.append(empty);
+            }
+            out.servers.forEach((s) => {
+                const row = document.createElement('div');
+                row.className = 'discover-row';
+                const info = document.createElement('div');
+                info.className = 'finfo';
+                const name = document.createElement('strong');
+                name.textContent = s.name;
+                const meta = document.createElement('span');
+                meta.textContent = s.count + (s.count === 1 ? ' member' : ' members') + ' · created ' + new Date(s.created * 1000).toLocaleDateString();
+                info.append(name, meta);
+                const join = document.createElement('button');
+                join.type = 'button';
+                join.textContent = s.joined ? 'Joined' : 'Join';
+                join.disabled = s.joined;
+                join.onclick = async () => {
+                    const joined = await serverRequest(state, { action: 'server-join', id: s.id });
+                    if (!joined) return;
+                    join.textContent = 'Joined';
+                    join.disabled = true;
+                    loadServers();
+                    notify('Joined ' + joined.server.name + '.', 'success');
+                };
+                row.append(info, join);
+                box.append(row);
+            });
+            state.discoverNext = out.next;
+            $('server-discover-more').classList.toggle('hidden', !out.next);
+            $('server-discover-panel').classList.remove('hidden');
+        }
+
+        $('server-discover').onclick = () => {
+            const state = openServerDialog('discover');
+            loadDiscover(state, 0, false);
+        };
+        $('server-discover-more').onclick = () => {
+            const state = serverDialog;
+            if (state && state.mode === 'discover' && state.discoverNext) loadDiscover(state, state.discoverNext, true);
         };
 
         async function checkInvite() {

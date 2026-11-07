@@ -44,7 +44,7 @@ async function connectDB() {
       })
       .then(async (m) => {
         // With buffering disabled, build chat indexes only after connecting.
-        await Promise.all([Server.createIndexes(), Msg.createIndexes()]);
+        await Promise.all([Server.createIndexes(), Msg.createIndexes(), Invite.createIndexes(), Join.createIndexes()]);
         db.conn = m;
         return m;
       })
@@ -165,6 +165,28 @@ const serverSchema = new mongoose.Schema({
 }, { versionKey: false });
 
 const Server = mongoose.models.Server || mongoose.model('Server', serverSchema, 'servers');
+
+const inviteSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
+  s: { type: Number, required: true, index: true },
+  v: { type: Number, required: true },
+  c: { type: Number, default: nowSeconds },
+  x: { type: Number, default: null }
+}, { versionKey: false });
+
+const Invite = mongoose.models.Invite || mongoose.model('Invite', inviteSchema, 'invites');
+
+const joinSchema = new mongoose.Schema({
+  s: { type: Number, required: true },
+  u: { type: Number, required: true },
+  t: { type: Number, default: nowSeconds },
+  i: { type: String, default: null },
+  v: { type: Number, default: null }
+}, { versionKey: false });
+
+joinSchema.index({ s: 1, u: 1 }, { unique: true });
+
+const Join = mongoose.models.Join || mongoose.model('Join', joinSchema, 'joins');
 
 const friendSchema = new mongoose.Schema({
   _id: String,
@@ -691,7 +713,37 @@ function person(user) {
 }
 
 function publicServer(server) {
-  return { id: server._id, name: server.n, owner: server.o, count: server.m.length };
+  return { id: server._id, name: server.n, owner: server.o, count: server.m.length, created: server.c };
+}
+
+const SERVER_LIMIT = 100;
+
+async function atServerLimit(me) {
+  return (await Server.countDocuments({ m: me })) >= SERVER_LIMIT;
+}
+
+async function ensureInvite(server) {
+  try {
+    await Invite.updateOne(
+      { _id: server.i },
+      { $setOnInsert: { s: server._id, v: server.o, c: server.c || nowSeconds(), x: null } },
+      { upsert: true }
+    );
+  } catch (err) {
+    if (err.code !== 11000) throw err;
+  }
+}
+
+async function recordJoin(serverId, me, code, inviter) {
+  try {
+    await Join.updateOne(
+      { s: serverId, u: me },
+      { $setOnInsert: { t: nowSeconds(), i: code, v: inviter } },
+      { upsert: true }
+    );
+  } catch (err) {
+    if (err.code !== 11000) throw err;
+  }
 }
 
 async function serverForUser(res, id, me, ownerOnly = false) {
@@ -700,7 +752,7 @@ async function serverForUser(res, id, me, ownerOnly = false) {
     res.status(400).json({ error: 'Server id required.' });
     return null;
   }
-  const server = await Server.findById(sid).select(ownerOnly ? 'n o m i' : 'n o m').lean();
+  const server = await Server.findById(sid).select('n o m i c').lean();
   if (!server) {
     res.status(404).json({ error: 'Server not found.' });
     return null;
@@ -807,6 +859,9 @@ async function handleServerCreate(req, res, raw) {
     return res.status(400).json({ error: 'Server names must be 1–60 characters.' });
   }
   const name = raw.trim();
+  if (await atServerLimit(auth.userId)) {
+    return res.status(403).json({ error: `You can be a member of at most ${SERVER_LIMIT} servers.` });
+  }
   for (let attempt = 0; attempt < 5; attempt++) {
     const last = await Server.findOne({ _id: { $type: 'number' } }).sort({ _id: -1 }).select('_id').lean();
     try {
@@ -817,6 +872,12 @@ async function handleServerCreate(req, res, raw) {
         m: [auth.userId],
         i: crypto.randomBytes(24).toString('hex')
       });
+      if ((await Server.countDocuments({ m: auth.userId })) > SERVER_LIMIT) {
+        await Server.deleteOne({ _id: server._id, o: auth.userId });
+        return res.status(403).json({ error: `You can be a member of at most ${SERVER_LIMIT} servers.` });
+      }
+      await ensureInvite(server);
+      await recordJoin(server._id, auth.userId, null, null);
       return res.status(200).json({ server: publicServer(server) });
     } catch (err) {
       if (err.code !== 11000) throw err;
@@ -829,7 +890,7 @@ async function handleServers(req, res) {
   const auth = await requireLiveSession(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
 
-  const servers = await Server.find({ m: auth.userId }).select('n o m').sort({ _id: 1 }).lean();
+  const servers = await Server.find({ m: auth.userId }).select('n o m c').sort({ _id: 1 }).lean();
   const rows = servers.length
     ? await messageSummaries({ s: { $in: servers.map((s) => s._id) } }, '$s', auth.userId)
     : [];
@@ -846,7 +907,24 @@ async function handleServerMembers(req, res, id) {
   const server = await serverForUser(res, id, auth.userId);
   if (!server) return;
   const members = await participants(server.m);
-  return res.status(200).json({ server: publicServer(server), members: members.map(person) });
+  const joins = await Join.find({ s: server._id }).lean();
+  const byUser = new Map(joins.map((j) => [j.u, j]));
+  const inviterIds = [...new Set(joins.map((j) => j.v).filter((v) => v != null))];
+  const inviters = new Map((await participants(inviterIds)).map((u) => [u._id, u.n || null]));
+  return res.status(200).json({
+    server: publicServer(server),
+    members: members.map((u) => {
+      const j = byUser.get(u._id);
+      return {
+        ...person(u),
+        via: {
+          inviter: j && j.v != null ? (inviters.get(j.v) || null) : null,
+          discovery: !!j && j.i == null && u._id !== server.o,
+          t: j ? j.t : null
+        }
+      };
+    })
+  });
 }
 
 async function handleServerInvite(req, res, id, rotate = false) {
@@ -856,16 +934,20 @@ async function handleServerInvite(req, res, id, rotate = false) {
 
   const server = await serverForUser(res, id, auth.userId, true);
   if (!server) return;
+  await ensureInvite(server);
   if (!rotate) return res.status(200).json({ code: server.i });
 
   for (let attempt = 0; attempt < 5; attempt++) {
+    const code = crypto.randomBytes(24).toString('hex');
     try {
+      await Invite.create({ _id: code, s: server._id, v: auth.userId });
       const updated = await Server.findOneAndUpdate(
         { _id: server._id, o: auth.userId },
-        { $set: { i: crypto.randomBytes(24).toString('hex') } },
+        { $set: { i: code } },
         { returnDocument: 'after' }
       ).select('i').lean();
       if (!updated) return res.status(404).json({ error: 'Server not found.' });
+      await Invite.updateOne({ _id: server.i }, { $set: { x: nowSeconds() } });
       return res.status(200).json({ code: updated.i });
     } catch (err) {
       if (err.code !== 11000) throw err;
@@ -882,15 +964,113 @@ async function handleInvite(req, res, code, join) {
   }
 
   // Match the current code in the write itself, so rotation cannot revive an old invite.
-  const server = join
-    ? await Server.findOneAndUpdate({ i: code }, { $addToSet: { m: auth.userId } }, { returnDocument: 'after' }).select('n o m').lean()
-    : await Server.findOne({ i: code }).select('n m').lean();
+  if (join) {
+    const existing = await Server.findOne({ i: code }).select('n o m i c').lean();
+    if (!existing) return res.status(404).json({ error: 'Invite not found.' });
+    await ensureInvite(existing);
+    if (existing.m.includes(auth.userId)) return res.status(200).json({ server: publicServer(existing) });
+    if (await atServerLimit(auth.userId)) {
+      return res.status(403).json({ error: `You can be a member of at most ${SERVER_LIMIT} servers.` });
+    }
+    const server = await Server.findOneAndUpdate(
+      { i: code, m: { $ne: auth.userId } },
+      { $addToSet: { m: auth.userId } },
+      { returnDocument: 'after' }
+    ).select('n o m c').lean();
+    if (!server) {
+      const current = await Server.findOne({ i: code }).select('n o m c').lean();
+      if (current && current.m.includes(auth.userId)) return res.status(200).json({ server: publicServer(current) });
+      return res.status(404).json({ error: 'Invite not found.' });
+    }
+    if ((await Server.countDocuments({ m: auth.userId })) > SERVER_LIMIT) {
+      await Server.updateOne({ _id: server._id }, { $pull: { m: auth.userId } });
+      return res.status(403).json({ error: `You can be a member of at most ${SERVER_LIMIT} servers.` });
+    }
+    const invite = await Invite.findById(code).select('v').lean();
+    await recordJoin(server._id, auth.userId, code, invite ? invite.v : existing.o);
+    return res.status(200).json({ server: publicServer(server) });
+  }
+
+  const server = await Server.findOne({ i: code }).select('n o m i c').lean();
   if (!server) return res.status(404).json({ error: 'Invite not found.' });
-  if (join) return res.status(200).json({ server: publicServer(server) });
+  await ensureInvite(server);
   return res.status(200).json({
-    server: { id: server._id, name: server.n, count: server.m.length },
+    server: { id: server._id, name: server.n, count: server.m.length, created: server.c },
     joined: server.m.includes(auth.userId)
   });
+}
+
+async function handleServerInvites(req, res, id) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const server = await serverForUser(res, id, auth.userId, true);
+  if (!server) return;
+  await ensureInvite(server);
+  const invites = await Invite.find({ s: server._id }).sort({ c: -1, _id: 1 }).lean();
+  const joins = await Join.find({ s: server._id, i: { $ne: null } }).sort({ t: 1 }).lean();
+  const ids = [...new Set([...invites.map((i) => i.v), ...joins.map((j) => j.u)])];
+  const people = new Map((await participants(ids)).map((u) => [u._id, person(u)]));
+  const byCode = new Map();
+  for (const j of joins) {
+    if (!byCode.has(j.i)) byCode.set(j.i, []);
+    byCode.get(j.i).push({ user: people.get(j.u) || { id: j.u, username: null, avatar: null, status: 'offline' }, t: j.t });
+  }
+  return res.status(200).json({
+    invites: invites.map((i) => ({
+      code: i._id,
+      created: i.c,
+      expired: i.x,
+      active: i._id === server.i,
+      inviter: people.get(i.v) || { id: i.v, username: null, avatar: null, status: 'offline' },
+      joins: byCode.get(i._id) || [],
+      count: (byCode.get(i._id) || []).length
+    }))
+  });
+}
+
+async function handleServerDiscover(req, res, before) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+  const cursor = before == null ? 0 : Number(before);
+  if (!Number.isSafeInteger(cursor) || cursor < 0) return res.status(400).json({ error: 'Invalid cursor.' });
+
+  const servers = await Server.find({ _id: { $gt: cursor } }).select('n m c').sort({ _id: 1 }).limit(21).lean();
+  const page = servers.slice(0, 20);
+  return res.status(200).json({
+    servers: page.map((s) => ({ id: s._id, name: s.n, count: s.m.length, created: s.c, joined: s.m.includes(auth.userId) })),
+    next: servers.length > 20 ? page[page.length - 1]._id : null
+  });
+}
+
+async function handleServerJoin(req, res, id) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+  const sid = ['number', 'string'].includes(typeof id) ? Number(id) : NaN;
+  if (!Number.isSafeInteger(sid) || sid < 1) return res.status(400).json({ error: 'Server id required.' });
+
+  const existing = await Server.findById(sid).select('n o m c').lean();
+  if (!existing) return res.status(404).json({ error: 'Server not found.' });
+  if (existing.m.includes(auth.userId)) return res.status(200).json({ server: publicServer(existing) });
+  if (await atServerLimit(auth.userId)) {
+    return res.status(403).json({ error: `You can be a member of at most ${SERVER_LIMIT} servers.` });
+  }
+  const server = await Server.findOneAndUpdate(
+    { _id: sid, m: { $ne: auth.userId } },
+    { $addToSet: { m: auth.userId } },
+    { returnDocument: 'after' }
+  ).select('n o m c').lean();
+  if (!server) {
+    const current = await Server.findById(sid).select('n o m c').lean();
+    if (current && current.m.includes(auth.userId)) return res.status(200).json({ server: publicServer(current) });
+    return res.status(404).json({ error: 'Server not found.' });
+  }
+  if ((await Server.countDocuments({ m: auth.userId })) > SERVER_LIMIT) {
+    await Server.updateOne({ _id: sid }, { $pull: { m: auth.userId } });
+    return res.status(403).json({ error: `You can be a member of at most ${SERVER_LIMIT} servers.` });
+  }
+  await recordJoin(sid, auth.userId, null, null);
+  return res.status(200).json({ server: publicServer(server) });
 }
 
 async function handleMessages(req, res, id, kind) {
@@ -1046,7 +1226,7 @@ module.exports = async function handler(req, res) {
     }
 
     await connectDB();
-    const { action, email, password, otp, id, image, accept, username, status, bio, text, kind, name, code, rotate } = body;
+    const { action, email, password, otp, id, image, accept, username, status, bio, text, kind, name, code, rotate, before } = body;
 
     if (action === 'register') {
       if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
@@ -1113,6 +1293,9 @@ module.exports = async function handler(req, res) {
     if (action === 'server-invite') return await handleServerInvite(req, res, id, rotate);
     if (action === 'invite-preview') return await handleInvite(req, res, code, false);
     if (action === 'invite-join') return await handleInvite(req, res, code, true);
+    if (action === 'server-invites') return await handleServerInvites(req, res, id);
+    if (action === 'server-discover') return await handleServerDiscover(req, res, before);
+    if (action === 'server-join') return await handleServerJoin(req, res, id);
     if (action === 'messages') return await handleMessages(req, res, id, kind);
     if (action === 'threads') return await handleThreads(req, res);
     if (action === 'send') return await handleSend(req, res, id, text, kind);
