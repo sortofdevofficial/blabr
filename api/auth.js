@@ -664,6 +664,33 @@ async function handleMessages(req, res, id) {
   });
 }
 
+async function handleThreads(req, res) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const me = auth.userId;
+  const docs = await Friend.find({ $or: [{ a: me }, { b: me }], s: 'a' }).select('a b').lean();
+  const allowed = new Set(docs.map((f) => (f.a === me ? f.b : f.a)));
+  if (!allowed.size) return res.status(200).json({ threads: [] });
+
+  const rows = await Msg.aggregate([
+    { $match: { $or: [{ a: me }, { b: me }] } },
+    { $sort: { t: -1, _id: -1 } },
+    { $group: {
+      _id: { $cond: [{ $eq: ['$a', me] }, '$b', '$a'] },
+      m: { $first: '$m' },
+      t: { $first: '$t' },
+      a: { $first: '$a' }
+    } }
+  ]);
+
+  return res.status(200).json({
+    threads: rows
+      .filter((r) => allowed.has(r._id))
+      .map((r) => ({ id: r._id, text: r.m, t: r.t, mine: r.a === me }))
+  });
+}
+
 async function handleSend(req, res, id, raw) {
   const found = await targetUser(req, res, id);
   if (!found) return;
@@ -818,6 +845,7 @@ module.exports = async function handler(req, res) {
     if (action === 'bio') return await handleBio(req, res, bio);
     if (action === 'profile') return await handleProfile(req, res, id);
     if (action === 'messages') return await handleMessages(req, res, id);
+    if (action === 'threads') return await handleThreads(req, res);
     if (action === 'send') return await handleSend(req, res, id, text);
     if (action === 'ping') return await handlePing(req, res);
     if (action === 'status') return await handleStatus(req, res, status);
