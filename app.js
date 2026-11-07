@@ -688,32 +688,34 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'F12' || (mod && ((e.shiftKey || e.altKey) && 'ijc'.includes(k) || k === 'u'))) e.preventDefault();
 }, true);
 
-/* ---------- login background: gravity dots ---------- */
+/* ---------- login background: cursor trail over a dot grid ---------- */
 (() => {
-    const cv = $('gravity'), c = cv.getContext('2d'), m = { x: -999, y: -999 }, R = 240, GAP = 30;
-    let dots = [], w, ht, dpr;
+    const cv = $('gravity'), c = cv.getContext('2d'), m = { x: -999, y: -999 }, R = 140, GAP = 30, PUSH = 12, N = 24;
+    const trail = Array.from({ length: N }, () => ({ x: -999, y: -999 }));
+    let dots = [], w, ht;
     const seed = () => {
-        dpr = devicePixelRatio || 1; w = innerWidth; ht = innerHeight;
+        const dpr = devicePixelRatio || 1; w = innerWidth; ht = innerHeight;
         cv.width = w * dpr; cv.height = ht * dpr; c.setTransform(dpr, 0, 0, dpr, 0, 0);
         dots = [];
-        for (let x = GAP / 2; x < w; x += GAP) for (let y = GAP / 2; y < ht; y += GAP) dots.push({ hx: x, hy: y, x, y, vx: 0, vy: 0 });
+        for (let x = GAP / 2; x < w; x += GAP) for (let y = GAP / 2; y < ht; y += GAP) dots.push({ hx: x, hy: y, x, y });
     };
     addEventListener('resize', seed); seed();
     addEventListener('pointermove', (e) => { m.x = e.clientX; m.y = e.clientY; });
     document.addEventListener('pointerleave', () => { m.x = m.y = -999; });
+    const dot = (x, y, r, a) => { c.fillStyle = `rgba(239,232,218,${a})`; c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill(); };
     (function tick() {
         requestAnimationFrame(tick);
         if ($('auth-screen').classList.contains('hidden')) return;
         c.clearRect(0, 0, w, ht);
-        for (const d of dots) {
-            const dx = m.x - d.x, dy = m.y - d.y, dist = Math.hypot(dx, dy) || 1, near = Math.max(0, 1 - dist / R);
-            const pull = near * near * 0.09; // spring-like (no 1/dist term), so dots settle instead of jittering
-            d.vx = (d.vx + dx * pull + (d.hx - d.x) * 0.03) * 0.78;
-            d.vy = (d.vy + dy * pull + (d.hy - d.y) * 0.03) * 0.78;
-            d.x += d.vx; d.y += d.vy;
-            c.fillStyle = `rgba(239,232,218,${0.32 + near * 0.68})`;
-            c.beginPath(); c.arc(d.x, d.y, 1.5 + near * 2.2, 0, 6.283); c.fill();
+        trail.forEach((p, i) => { const t = i ? trail[i - 1] : m, k = i ? 0.32 : 0.45; p.x += (t.x - p.x) * k; p.y += (t.y - p.y) * k; });
+        for (const d of dots) { // each grid dot leans a few px toward the nearest trail point, then eases back: no clumping
+            let best = null, bd = R;
+            for (const p of trail) { const q = Math.hypot(p.x - d.hx, p.y - d.hy); if (q < bd) { bd = q; best = p; } }
+            const near = best ? 1 - bd / R : 0, tx = best ? d.hx + (best.x - d.hx) / (bd || 1) * near * PUSH : d.hx, ty = best ? d.hy + (best.y - d.hy) / (bd || 1) * near * PUSH : d.hy;
+            d.x += (tx - d.x) * 0.2; d.y += (ty - d.y) * 0.2;
+            dot(d.x, d.y, 1.4 + near * 1.6, 0.3 + near * 0.6);
         }
+        trail.forEach((p, i) => { const f = 1 - i / N; dot(p.x, p.y, 1.5 + f * 5, 0.15 + f * 0.85); });
     })();
 })();
 
