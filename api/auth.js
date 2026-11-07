@@ -127,7 +127,8 @@ const msgSchema = new mongoose.Schema({
   a: { type: Number, required: true },
   b: { type: Number, required: true },
   m: { type: String, required: true },
-  t: { type: Number, default: nowSeconds }
+  t: { type: Number, default: nowSeconds },
+  d: { type: Number, default: 0 }
 }, { versionKey: false });
 
 msgSchema.index({ a: 1, b: 1, t: -1 });
@@ -655,6 +656,7 @@ async function handleMessages(req, res, id) {
   const other = found.other;
 
   const docs = await Msg.find({
+    d: { $ne: 1 },
     $or: [{ a: me, b: other }, { a: other, b: me }]
   }).sort({ t: -1 }).limit(50).lean();
 
@@ -674,7 +676,7 @@ async function handleThreads(req, res) {
   if (!allowed.size) return res.status(200).json({ threads: [] });
 
   const rows = await Msg.aggregate([
-    { $match: { $or: [{ a: me }, { b: me }] } },
+    { $match: { d: { $ne: 1 }, $or: [{ a: me }, { b: me }] } },
     { $sort: { t: -1, _id: -1 } },
     { $group: {
       _id: { $cond: [{ $eq: ['$a', me] }, '$b', '$a'] },
@@ -726,7 +728,7 @@ async function handleDelete(req, res, id) {
   if (!m) return res.status(404).json({ error: 'Message not found.' });
   if (m.a !== auth.userId) return res.status(403).json({ error: 'You can only delete your own messages.' });
 
-  await Msg.deleteOne({ _id: mid });
+  await Msg.updateOne({ _id: mid }, { $set: { d: 1 } });
   return res.status(200).json({ ok: true });
 }
 

@@ -10,8 +10,8 @@
         * { box-sizing: border-box; }
         body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; color: #f2f2f4; background: radial-gradient(1200px 600px at 50% -10%, #1b1b22 0%, #0e0e11 60%); }
         .card { background: #17171b; padding: 26px; border-radius: 16px; width: 100%; max-width: 320px; flex: 0 0 auto; margin: auto 0; border: 1px solid #26262d; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
-        #dash { display: flex; width: min(980px, calc(100vw - 32px)); height: min(760px, calc(100dvh - 32px)); max-width: none; padding: 0; overflow: hidden; position: relative; }
-        .dash-sidebar { flex: 0 0 248px; min-width: 0; display: flex; flex-direction: column; background: #141418; border-right: 1px solid #26262d; }
+        #dash { display: flex; width: min(980px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); height: min(760px, calc(100dvh - 32px)); max-width: none; padding: 0; overflow: hidden; position: relative; }
+        .dash-sidebar { flex: 0 0 clamp(190px, 26%, 248px); min-width: 0; display: flex; flex-direction: column; background: #141418; border-right: 1px solid #26262d; }
         .dash-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
         .dash-home { flex: 1; min-width: 0; overflow-y: auto; padding: 20px; }
         .dash-home .dash-head { padding-right: 0; }
@@ -193,13 +193,9 @@
         .hrow h3 { margin: 0; }
         .hrow .link { padding: 2px 6px; }
 
-        .msgr { display: flex; width: min(980px, calc(100vw - 32px)); height: min(760px, calc(100vh - 32px)); height: min(760px, calc(100dvh - 32px)); padding: 0; overflow: hidden; background: #17171b; border-radius: 16px; }
-        .msgr-list { position: relative; flex: 0 0 248px; min-width: 0; display: flex; flex-direction: column; background: #141418; border-right: 1px solid #26262d; }
-        .msgr-list-head { display: flex; align-items: center; gap: 8px; padding: 15px 44px 10px 14px; }
+        .msgr-list-head { display: flex; align-items: center; gap: 8px; padding: 15px 14px 10px; }
         .msgr-list-head strong { font-size: 13px; letter-spacing: .02em; color: #f2f2f4; }
-        .msgr-close { position: absolute; top: 10px; right: 10px; z-index: 3; width: 30px; height: 30px; margin: 0; padding: 0; border-radius: 8px; background: #24242b; color: #c9c9d4; font-size: 17px; line-height: 1; display: flex; align-items: center; justify-content: center; border: none; }
-        .msgr-close:hover { background: #2f2f38; color: #fff; }
-        .msgr-convos { flex: 1; overflow-y: auto; padding: 2px 8px 12px; }
+        .msgr-convos { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 8px 12px; }
         .msgr-convos::-webkit-scrollbar, .chat-log::-webkit-scrollbar { width: 8px; }
         .msgr-convos::-webkit-scrollbar-thumb, .chat-log::-webkit-scrollbar-thumb { background: #2f2f38; border-radius: 8px; }
         .msgr-convos::-webkit-scrollbar-track, .chat-log::-webkit-scrollbar-track { background: transparent; }
@@ -224,8 +220,7 @@
         .msgr-me button { width: auto; margin: 0; padding: 6px; background: #24242b; color: #c9c9d4; border-radius: 8px; font-size: 14px; line-height: 1; }
         .msgr-me button:hover { background: #2f2f38; color: #fff; }
 
-        .msgr-pane { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: #17171b; }
-        .msgr-head { display: flex; align-items: center; gap: 10px; padding: 11px 52px 11px 14px; border-bottom: 1px solid #26262d; min-height: 60px; }
+        .msgr-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid #26262d; min-height: 60px; }
         .msgr-head .fava { width: 34px; height: 34px; font-size: 12px; }
         .msgr-title { min-width: 0; }
         .msgr-title h2 { margin: 0; padding: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f2f2f4; }
@@ -233,19 +228,16 @@
         .msgr-back { width: 30px; height: 30px; margin: 0; padding: 0; background: #24242b; color: #c9c9d4; font-size: 17px; border-radius: 8px; flex: 0 0 auto; }
         .msgr-back:hover { background: #2f2f38; color: #fff; }
         .msgr-thread { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-        .msgr-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #6b6b76; text-align: center; padding: 24px; }
-        .msgr-placeholder strong { color: #c9c9d4; font-size: 14px; }
-        .msgr-placeholder span { font-size: 12px; line-height: 1.5; }
 
-        .chat-log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 12px 0; }
+        .chat-log { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; padding: 12px 0; }
         .daysep { align-self: center; margin: 18px 0 12px; padding: 2px 10px; background: #202027; color: #6b6b76; font-size: 10.5px; font-weight: 600; border-radius: 8px; }
         .mrow { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 1px 14px; margin: 1px 0; }
         .mrow:hover { background: rgba(255, 255, 255, .025); }
         .mrow.grp { margin-top: 18px; }
         .mrow .fava { width: 38px; height: 38px; font-size: 14px; margin-top: 2px; flex: 0 0 auto; }
         .mrow .fava.ghost { visibility: hidden; }
-        .mbody { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-right: 80px; }
-        .mrow.mine .mbody { padding-right: 0; padding-left: 80px; align-items: flex-end; }
+        .mbody { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-right: clamp(28px, 10%, 80px); }
+        .mrow.mine .mbody { padding-right: 0; padding-left: clamp(28px, 10%, 80px); align-items: flex-end; }
         .meta { display: flex; align-items: baseline; gap: 6px; margin: 0 0 3px; }
         .meta strong { font-size: 14px; font-weight: 500; color: #f2f2f4; }
         .meta time { font-size: 11px; color: #6b6b76; cursor: default; }
@@ -270,28 +262,28 @@
 
         @media (max-width: 640px) {
             body { padding: 0; align-items: stretch; }
-            #dash { width: 100%; height: 100%; max-width: none; border-radius: 0; }
-            .dash-sidebar { flex: 1 1 auto; border-right: none; }
+            #dash { flex-direction: column; width: 100%; height: 100vh; height: 100dvh; max-width: none; border-radius: 0; border: none; }
+            .dash-sidebar { flex: 0 1 auto; max-height: 46%; min-height: 148px; border-right: none; border-bottom: 1px solid #26262d; }
+            .dash-main { flex: 1; min-height: 0; }
+            .dash-home { padding: 16px max(14px, env(safe-area-inset-right)) 16px max(14px, env(safe-area-inset-left)); }
             #dash-thread { display: none; }
             #dash.open-thread .dash-sidebar { display: none; }
             #dash.open-thread #dash-thread { display: flex; }
-            .msgr-head { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(52px, env(safe-area-inset-right)); }
+            .msgr-head { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
             .msgr-composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
             .chat-log { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
         }
 
         @media (max-width: 480px) {
-            .dash-sidebar { flex: 0 0 100%; }
-            .msgr-list-head { padding: 12px 44px 8px 12px; }
-            .msgr-head { min-height: 54px; padding: 9px 48px 9px 12px; }
+            .msgr-list-head { padding: 12px 12px 8px; }
+            .msgr-head { min-height: 54px; padding: 9px 12px; }
             .mrow { padding: 1px 12px; }
             .mrow .fava { width: 34px; height: 34px; font-size: 12px; }
-            .mbody { padding-right: 68px; }
-            .mrow.mine .mbody { padding-left: 68px; }
             .bub { font-size: 13.5px; padding: 6px 10px; }
             .meta strong { font-size: 13px; }
             .conv { padding: 7px 10px; }
             .conv .fava { width: 34px; height: 34px; }
+            .dash-home { padding: 14px 12px; }
         }
     </style>
 </head>
