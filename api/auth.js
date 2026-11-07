@@ -157,7 +157,7 @@ module.exports = async function handler(req, res) {
     if (action === 'channel-create') {
       const serverId = Number(id);
       const lastCh = await Channel.findOne({ s: serverId }).sort({ _id: -1 }).select('_id').lean();
-      const chId = (lastCh ? lastCh._id : 0) + 1; // Channel IDs start from 1 per server!
+      const chId = (lastCh ? lastCh._id : 0) + 1;
       const chName = String(channelName || '').trim().toLowerCase().replace(/\s+/g, '-');
       await Channel.create({ _id: chId, s: serverId, n: chName, cat: category || 'TEXT CHANNELS' });
       return res.status(200).json({ channel: { id: chId, name: chName, category: category || 'TEXT CHANNELS' } });
