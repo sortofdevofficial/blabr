@@ -715,6 +715,21 @@ async function handleSend(req, res, id, raw) {
   return res.status(500).json({ error: 'Could not save the message. Try again.' });
 }
 
+async function handleDelete(req, res, id) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const mid = Number(id);
+  if (!Number.isInteger(mid) || mid < 1) return res.status(400).json({ error: 'Message id required.' });
+
+  const m = await Msg.findById(mid).lean();
+  if (!m) return res.status(404).json({ error: 'Message not found.' });
+  if (m.a !== auth.userId) return res.status(403).json({ error: 'You can only delete your own messages.' });
+
+  await Msg.deleteOne({ _id: mid });
+  return res.status(200).json({ ok: true });
+}
+
 async function handleUsername(req, res, raw) {
   const auth = await requireLiveSession(req);
   if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
@@ -847,6 +862,7 @@ module.exports = async function handler(req, res) {
     if (action === 'messages') return await handleMessages(req, res, id);
     if (action === 'threads') return await handleThreads(req, res);
     if (action === 'send') return await handleSend(req, res, id, text);
+    if (action === 'delete') return await handleDelete(req, res, id);
     if (action === 'ping') return await handlePing(req, res);
     if (action === 'status') return await handleStatus(req, res, status);
 
