@@ -80,7 +80,7 @@ const friendSchema = new mongoose.Schema({
   _id: String,
   a: Number,
   b: Number,
-  s: { type: String, default: 'p' }
+  s: { type: String, default: 'a' }
 }, { versionKey: false });
 const Friend = mongoose.models.Friend || mongoose.model('Friend', friendSchema, 'friends');
 
@@ -91,7 +91,7 @@ module.exports = async function handler(req, res) {
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch {} }
 
     await connectDB();
-    const { action, email, password, otp, id, username, status, bio, text, kind, name, channelId, category, channelName, code } = body;
+    const { action, email, password, otp, id, username, text, kind, name, channelId, category, channelName, code } = body;
 
     if (action === 'register') {
       const key = String(email || '').trim().toLowerCase();
@@ -157,7 +157,7 @@ module.exports = async function handler(req, res) {
     if (action === 'channel-create') {
       const serverId = Number(id);
       const lastCh = await Channel.findOne({ s: serverId }).sort({ _id: -1 }).select('_id').lean();
-      const chId = (lastCh ? lastCh._id : 0) + 1; // Channel ID starts at 1 per server!
+      const chId = (lastCh ? lastCh._id : 0) + 1; // Channel IDs start from 1 per server!
       const chName = String(channelName || '').trim().toLowerCase().replace(/\s+/g, '-');
       await Channel.create({ _id: chId, s: serverId, n: chName, cat: category || 'TEXT CHANNELS' });
       return res.status(200).json({ channel: { id: chId, name: chName, category: category || 'TEXT CHANNELS' } });
@@ -167,13 +167,6 @@ module.exports = async function handler(req, res) {
       const server = await Server.findOne({ _id: Number(id), o: auth.userId }).lean();
       if (!server) return res.status(403).json({ error: 'Only owner can invite.' });
       return res.status(200).json({ code: server.i });
-    }
-
-    if (action === 'invite-join') {
-      const server = await Server.findOne({ i: code }).lean();
-      if (!server) return res.status(404).json({ error: 'Invite not found.' });
-      await Server.updateOne({ _id: server._id }, { $addToSet: { m: auth.userId } });
-      return res.status(200).json({ server: { id: server._id, name: server.n, count: server.m.length } });
     }
 
     if (action === 'messages') {

@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/png" href="/favicon.png?v=3">
-    <link rel="apple-touch-icon" href="/favicon.png?v=3">
     <link rel="stylesheet" href="/style.css">
     <title>pratr</title>
 </head>
@@ -31,7 +30,7 @@
     <div class="card hidden" id="dash">
         <div class="dash-sidebar">
             <div class="sidebar-scroll">
-                <div class="msgr-list-head"><strong>Servers</strong><span class="head-actions"><button type="button" id="server-discover">Discover</button><button type="button" id="server-create">+ Create</button></span></div>
+                <div class="msgr-list-head"><strong>Servers</strong><span class="head-actions"><button type="button" id="server-create">+ Create</button></span></div>
                 <div class="msgr-convos" id="dash-servers"></div>
                 <div class="msgr-list-head"><strong>Messages</strong></div>
                 <div class="msgr-convos" id="dash-convos"></div>
@@ -49,66 +48,22 @@
             <div class="dash-home" id="dash-home">
                 <div class="brand small"><img src="/logo.png" alt="pratr"></div>
                 <div class="dash-head">
-                    <button type="button" class="avatar" id="avatar-btn" title="Change profile photo">
-                        <img id="avatar-img" alt="Profile photo" class="hidden">
+                    <div class="avatar">
                         <span id="avatar-initial">?</span>
-                        <span class="edit">Edit</span>
-                        <span class="pdot on" id="self-presence" title="Online"></span>
-                    </button>
+                        <span class="pdot on"></span>
+                    </div>
                     <div class="dash-me">
-                        <div class="nameline">
-                            <strong id="uname">@</strong>
-                            <button type="button" class="link" id="uname-edit">Edit</button>
-                        </div>
+                        <strong id="uname">@</strong>
                         <p id="who"></p>
-                        <div class="bio-row">
-                            <p id="bio" class="bio-line empty">No bio yet</p>
-                            <button type="button" class="link" id="bio-edit">Add bio</button>
-                        </div>
-                        <button type="button" class="status-chip" id="status-btn" aria-haspopup="menu" aria-expanded="false">
-                            <i class="pdot-mini on" id="status-dot"></i><span id="status-label">Online</span>
-                        </button>
-                        <div class="status-menu hidden" id="status-menu" role="menu">
-                            <button type="button" data-st="online" role="menuitem"><i class="pdot-mini on"></i>Online</button>
-                            <button type="button" data-st="idle" role="menuitem"><i class="pdot-mini idle"></i>Idle</button>
-                            <button type="button" data-st="dnd" role="menuitem"><i class="pdot-mini dnd"></i>Do Not Disturb</button>
-                        </div>
+                        <p id="bio" class="bio-line empty">No bio yet</p>
                     </div>
                 </div>
-                <form id="uname-form" class="hidden">
-                    <input id="uname-input" maxlength="20" placeholder="username" autocomplete="username" spellcheck="false" required>
-                    <button type="submit">Save</button>
-                    <button type="button" class="ghost" id="uname-cancel">Cancel</button>
-                </form>
-                <p id="uname-msg"></p>
-                <form id="bio-form" class="hidden">
-                    <input id="bio-input" maxlength="160" placeholder="A short bio" autocomplete="off">
-                    <button type="submit">Save</button>
-                    <button type="button" class="ghost" id="bio-cancel">Cancel</button>
-                </form>
-                <p id="bio-msg"></p>
-                <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="file-input">
                 <h3>Active logins</h3>
                 <div id="sessions"></div>
                 <div class="hrow">
                     <h3>Friends</h3>
                 </div>
-                <p class="fhint">Right-click a friend to open their profile or message them.</p>
-                <div class="ftabs" role="tablist">
-                    <button type="button" data-tab="all" class="on">All<span class="count" id="f-c-all">0</span></button>
-                    <button type="button" data-tab="pending">Pending<span class="count" id="f-c-pending">0</span></button>
-                    <button type="button" data-tab="add">Add friend</button>
-                </div>
-                <p id="friend-msg"></p>
                 <div id="f-pane-all"></div>
-                <div id="f-pane-pending" class="hidden"></div>
-                <div id="f-pane-add" class="hidden">
-                    <p class="fhint">You can add friends with their email or @username.</p>
-                    <form id="friend-form">
-                        <input type="text" id="friend-who" placeholder="Email or @username" autocomplete="off" spellcheck="false" required>
-                        <button type="submit" id="friend-add">Send request</button>
-                    </form>
-                </div>
                 <button type="button" id="logout-btn">Logout</button>
             </div>
 
@@ -118,7 +73,7 @@
                     <div class="fava" id="chat-ava"><span id="chat-initial">?</span></div>
                     <div class="msgr-title">
                         <h2 id="chat-name">@</h2>
-                        <p class="chat-status"><i class="pdot-mini" id="chat-dot"></i><span id="chat-status">Offline</span></p>
+                        <p class="chat-status"><i class="pdot-mini on" id="chat-dot"></i><span id="chat-status">Online</span></p>
                     </div>
                     <div class="thread-actions hidden" id="server-actions">
                         <button type="button" id="server-members-btn" title="Server Members">👥 Members</button>
@@ -129,19 +84,17 @@
                     <div class="channels-pane hidden" id="channels-pane">
                         <div class="channels-header">
                             <span id="channels-server-name">CHANNELS</span>
-                            <button type="button" class="link" id="add-channel-btn" title="Create Text Channel" style="padding:2px 6px; font-size:16px;">+</button>
+                            <button type="button" class="link" id="add-channel-btn" title="Create Text Channel">+</button>
                         </div>
                         <div class="channels-list" id="channels-list"></div>
                     </div>
                     <div class="thread-chat-pane">
                         <div class="chat-log" id="chat-log"></div>
                         <div class="msgr-composer">
-                            <div id="mention-options" class="mention-options hidden" role="listbox" aria-label="Mention a participant"></div>
                             <form id="chat-form">
-                                <input id="chat-input" maxlength="2000" placeholder="Message…" autocomplete="off" aria-label="Message" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mention-options">
+                                <input id="chat-input" maxlength="2000" placeholder="Message…" autocomplete="off" required>
                                 <button type="submit" id="chat-send">➤</button>
                             </form>
-                            <p id="chat-msg"></p>
                         </div>
                     </div>
                     <div class="members-sidebar hidden" id="members-sidebar">
@@ -155,20 +108,20 @@
         </div>
     </div>
 
-    <!-- Modals & Context Menus -->
+    <!-- Modals -->
     <div class="modal hidden" id="channel-modal" role="dialog" aria-modal="true">
         <div class="modal-card">
             <button type="button" class="modal-close" id="channel-modal-close" aria-label="Close">×</button>
             <h2>Create Text Channel</h2>
             <form id="channel-create-form">
-                <label for="new-channel-name" style="font-size:12px; color:#8b8b96; text-transform:uppercase; font-weight:700;">Channel Name</label>
-                <input id="new-channel-name" placeholder="new-channel" maxlength="40" required autocomplete="off">
-                <label for="new-channel-cat" style="font-size:12px; color:#8b8b96; text-transform:uppercase; font-weight:700; margin-top:8px; display:block;">Category</label>
+                <label for="new-channel-name">Channel Name</label>
+                <input id="new-channel-name" placeholder="general" maxlength="40" required autocomplete="off">
+                <label for="new-channel-cat" style="margin-top:8px; display:block;">Category</label>
                 <input id="new-channel-cat" placeholder="TEXT CHANNELS" maxlength="40" autocomplete="off" value="TEXT CHANNELS">
-                <p id="channel-modal-msg" style="color:#ff6b6b; font-size:12px; min-height:16px; margin:4px 0;"></p>
+                <p id="channel-modal-msg"></p>
                 <div class="modal-actions" style="margin-top:12px;">
                     <button type="button" class="ghost" id="channel-modal-cancel">Cancel</button>
-                    <button type="submit" id="channel-modal-submit">Create Channel</button>
+                    <button type="submit">Create</button>
                 </div>
             </form>
         </div>
@@ -177,71 +130,25 @@
     <div class="modal hidden" id="server-dialog" role="dialog" aria-modal="true">
         <div class="modal-card">
             <button type="button" class="modal-close" id="server-dialog-close" aria-label="Close">×</button>
-            <h2 id="server-dialog-title">Server Details</h2>
+            <h2 id="server-dialog-title">Server Settings</h2>
             <form id="server-create-form" class="hidden">
-                <p class="fhint">A little space for your group.</p>
                 <label for="server-name">Server name</label>
-                <input id="server-name" maxlength="60" placeholder="Your group name" autocomplete="off" required>
-                <button type="submit" id="server-create-submit">Create server</button>
+                <input id="server-name" maxlength="60" placeholder="My Server" autocomplete="off" required>
+                <button type="submit" style="margin-top:10px;">Create server</button>
             </form>
             <div id="server-invite-panel" class="hidden">
                 <p class="fhint">Anyone with this invite link can join your server.</p>
                 <input id="server-invite-link" readonly>
                 <div class="modal-actions" style="margin-top:10px;">
                     <button type="button" id="server-invite-copy">Copy link</button>
-                    <button type="button" class="ghost" id="server-invite-rotate">Replace link</button>
                 </div>
-            </div>
-            <div id="server-members-list" class="hidden" style="max-height:40vh; overflow-y:auto; margin-top:10px;"></div>
-            <div id="server-discover-panel" class="hidden">
-                <div id="server-discover-list" style="max-height:40vh; overflow-y:auto;"></div>
-            </div>
-            <p id="server-error" role="status"></p>
-        </div>
-    </div>
-
-    <div class="modal hidden" id="confirm">
-        <div class="modal-card">
-            <h2 id="confirm-title">Are you sure?</h2>
-            <p id="confirm-text" class="confirm-text"></p>
-            <div class="modal-actions">
-                <button type="button" class="ghost" id="confirm-cancel">Cancel</button>
-                <button type="button" id="confirm-ok">Confirm</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal hidden" id="profile">
-        <div class="modal-card profile-card">
-            <button type="button" class="modal-close" id="profile-close" aria-label="Close">×</button>
-            <div class="profile-top">
-                <div class="pava" id="profile-ava">?</div>
-                <div>
-                    <h2 id="profile-name">@</h2>
-                    <p class="profile-status"><i class="pdot-mini" id="profile-dot"></i><span id="profile-status">Offline</span></p>
-                </div>
-            </div>
-            <p class="profile-bio empty" id="profile-bio">No bio yet</p>
-            <p class="profile-email" id="profile-email"></p>
-            <div class="modal-actions">
-                <button type="button" id="profile-message">Message</button>
-                <button type="button" class="danger-ghost" id="profile-remove">Remove friend</button>
             </div>
         </div>
     </div>
 
     <div class="toast-stack" id="toast-stack"></div>
-
-    <div class="ctx-menu hidden" id="ctx-menu">
-        <button type="button" data-ctx="profile">View profile</button>
-        <button type="button" data-ctx="message">Message</button>
-        <hr>
-        <button type="button" data-ctx="remove" class="danger">Remove friend</button>
-    </div>
-
     <div class="ctx-menu hidden" id="channel-ctx-menu">
-        <button type="button" id="ctx-create-channel">➕ Create Channel Here</button>
-        <button type="button" id="ctx-create-category">📁 New Category</button>
+        <button type="button" id="ctx-create-channel">➕ Create Channel</button>
     </div>
 
     <script src="/app.js"></script>

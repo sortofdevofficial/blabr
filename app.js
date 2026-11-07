@@ -4,7 +4,6 @@ let token = localStorage.getItem('token') || '';
 let chat = null;
 let currentChannels = [];
 let currentChannelId = 1;
-let currentCategory = 'TEXT CHANNELS';
 let syncTimer = null;
 
 async function post(payload) {
@@ -19,17 +18,16 @@ async function post(payload) {
     }
 }
 
-function notify(text, type = 'success') {
+function notify(text) {
     const stack = $('toast-stack');
     if (!stack) return;
     const el = document.createElement('div');
-    el.className = `toast ${type}`;
+    el.className = 'toast';
     el.textContent = text;
     stack.append(el);
     setTimeout(() => el.remove(), 3500);
 }
 
-// Authentication & Session
 if ($('form')) {
     $('toggle').onclick = () => {
         isLogin = !isLogin;
@@ -48,7 +46,6 @@ if ($('form')) {
                 token = out.data.token;
                 localStorage.setItem('token', token);
                 localStorage.setItem('email', out.data.email);
-                localStorage.setItem('userId', out.data.id);
                 showDash();
             } else {
                 $('form').classList.add('hidden');
@@ -66,7 +63,6 @@ if ($('form')) {
             token = out.data.token;
             localStorage.setItem('token', token);
             localStorage.setItem('email', out.data.email);
-            localStorage.setItem('userId', out.data.id);
             showDash();
         } else {
             $('msg').textContent = out.data.error || 'Invalid code.';
@@ -93,7 +89,6 @@ function startSync() {
     }, 15000);
 }
 
-// Friends & Conversations
 async function loadFriends() {
     let out = await post({ action: 'friends' });
     if (!out.res.ok) return;
@@ -110,7 +105,6 @@ async function loadFriends() {
     });
 }
 
-// Servers & Channels
 async function loadServers() {
     let out = await post({ action: 'servers' });
     if (!out.res.ok) return;
@@ -135,7 +129,7 @@ async function loadChannels(serverId) {
     if (!out.res.ok) return;
     currentChannels = out.data.channels || [];
     renderChannelsList();
-    if (!currentChannelId && currentChannels.length) {
+    if (currentChannels.length) {
         currentChannelId = currentChannels[0].id;
     }
 }
@@ -144,21 +138,17 @@ function renderChannelsList() {
     const list = $('channels-list');
     if (!list) return;
     list.textContent = '';
-    
-    // Group by category
     const cats = {};
     currentChannels.forEach(c => {
         const cat = c.category || 'TEXT CHANNELS';
         if (!cats[cat]) cats[cat] = [];
         cats[cat].push(c);
     });
-
     for (const [catName, chans] of Object.entries(cats)) {
         const catDiv = document.createElement('div');
         catDiv.className = 'channel-cat';
         catDiv.textContent = catName;
         list.append(catDiv);
-
         chans.forEach(c => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -174,37 +164,6 @@ function renderChannelsList() {
     }
 }
 
-// Right-click Context Menu for Channels & Categories
-document.addEventListener('contextmenu', (e) => {
-    const pane = e.target.closest('.channels-pane');
-    if (pane && chat && chat.kind === 'server') {
-        e.preventDefault();
-        const menu = $('channel-ctx-menu');
-        menu.style.left = `${e.clientX}px`;
-        menu.style.top = `${e.clientY}px`;
-        menu.classList.remove('hidden');
-    }
-});
-
-document.addEventListener('click', () => {
-    if ($('channel-ctx-menu')) $('channel-ctx-menu').classList.add('hidden');
-});
-
-if ($('ctx-create-channel')) {
-    $('ctx-create-channel').onclick = () => {
-        $('channel-modal').classList.remove('hidden');
-    };
-    $('ctx-create-category').onclick = () => {
-        const catName = prompt('Enter category name:', 'VOICE CHANNELS');
-        if (catName) {
-            currentCategory = catName.toUpperCase();
-            $('channel-modal').classList.remove('hidden');
-            $('new-channel-cat').value = currentCategory;
-        }
-    };
-}
-
-// Channel creation modal handler
 if ($('add-channel-btn')) {
     $('add-channel-btn').onclick = () => { $('channel-modal').classList.remove('hidden'); };
     $('channel-modal-close').onclick = () => { $('channel-modal').classList.add('hidden'); };
@@ -221,13 +180,10 @@ if ($('add-channel-btn')) {
             renderChannelsList();
             loadChat(false, true);
             notify('Channel created successfully.');
-        } else {
-            $('channel-modal-msg').textContent = out.data.error || 'Could not create channel.';
         }
     };
 }
 
-// Chat Activation & Messaging
 function activateChat(kind, entry) {
     chat = { kind, id: entry.id, user: kind === 'dm' ? entry : null, server: kind === 'server' ? entry : null };
     if (kind === 'server') {
@@ -277,7 +233,7 @@ if ($('chat-form')) {
     };
 }
 
-async function loadChat(quiet = false, forceScroll = false) {
+async function loadChat(forceScroll = false) {
     if (!chat) return;
     let out = await post({
         action: 'messages',
@@ -315,7 +271,6 @@ async function loadChat(quiet = false, forceScroll = false) {
     }
 }
 
-// Server Details & Actions
 if ($('server-create')) {
     $('server-create').onclick = () => {
         $('server-dialog').classList.remove('hidden');
