@@ -219,10 +219,31 @@
         .msgr-me-info span { font-size: 11px; color: #8b8b96; }
         .msgr-me button { width: auto; margin: 0; padding: 6px; background: #24242b; color: #c9c9d4; border-radius: 8px; font-size: 14px; line-height: 1; }
         .msgr-me button:hover { background: #2f2f38; color: #fff; }
+        .sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+        .sidebar-scroll .msgr-convos { overflow: visible; }
+        .msgr-list-head { justify-content: space-between; flex-shrink: 0; }
+        .msgr-list-head button { width: auto; margin: 0; padding: 5px 8px; background: #24242b; color: #c9c9d4; font-size: 12px; }
+        .server-icon { border-radius: 10px; background: #2c4b43; color: #a7ead0; }
+        .conv-badge.mention-badge { background: #bb8433; color: #fff; }
+        .msgr-me { flex-shrink: 0; }
+        .thread-actions { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+        .thread-actions button { width: auto; margin: 0; padding: 7px 8px; font-size: 11px; background: #24242b; color: #d6d6e0; }
+        #server-dialog h2 { overflow-wrap: anywhere; }
+        #server-error { font-size: 12px; color: #ff8a8e; min-height: 16px; }
+        #server-members-list { max-height: 50dvh; overflow-y: auto; }
+        #server-invite-link { font-size: 12px; }
+        #server-join-name { overflow-wrap: anywhere; }
+        .mention { color: #dfdfff; background: #6366f140; border-radius: 3px; padding: 0 2px; }
+        .mention.self { color: #ffe0a0; background: #bb843340; }
+        .mrow.mentioned { background: #bb84330d; border-left: 2px solid #bb8433; }
+        .mention-options { position: absolute; bottom: calc(100% - 8px); left: 14px; right: 14px; max-height: min(180px, 35dvh); overflow-y: auto; background: #22222b; border: 1px solid #353540; border-radius: 10px; padding: 5px; z-index: 8; box-shadow: 0 8px 24px #0006; }
+        .mention-options button { display: block; width: 100%; padding: 8px; margin: 0; background: none; font-size: 13px; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+        .mention-options button[aria-selected="true"] { background: #39394d; }
+        .mrow:focus-within .mtools { opacity: 1; pointer-events: auto; }
 
-        .msgr-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid #26262d; min-height: 60px; }
+        .msgr-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 11px 14px; border-bottom: 1px solid #26262d; min-height: 60px; }
         .msgr-head .fava { width: 34px; height: 34px; font-size: 12px; }
-        .msgr-title { min-width: 0; }
+        .msgr-title { flex: 1; min-width: 0; }
         .msgr-title h2 { margin: 0; padding: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f2f2f4; }
         .chat-status { display: flex; align-items: center; gap: 5px; margin: 2px 0 0; color: #8b8b96; font-size: 11.5px; }
         .msgr-back { width: 30px; height: 30px; margin: 0; padding: 0; background: #24242b; color: #c9c9d4; font-size: 17px; border-radius: 8px; flex: 0 0 auto; }
@@ -252,7 +273,7 @@
         .mtools button.danger { color: #ff8a8e; }
         .mtools button.danger:hover { background: #3a2326; color: #ffa3a7; }
 
-        .msgr-composer { padding: 10px 14px 12px; }
+        .msgr-composer { position: relative; flex-shrink: 0; padding: 10px 14px 12px; }
         #chat-form { display: flex; gap: 8px; align-items: center; flex: 1; margin: 0; padding: 3px 4px 3px 12px; background: #101014; border: 1px solid #2b2b33; border-radius: 12px; }
         #chat-form:focus-within { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, .14); }
         #chat-form input { flex: 1; min-width: 0; margin: 0; padding: 8px 0; background: none; border: none; box-shadow: none; }
@@ -276,7 +297,14 @@
 
         @media (max-width: 480px) {
             .msgr-list-head { padding: 12px 12px 8px; }
-            .msgr-head { min-height: 54px; padding: 9px 12px; }
+            .msgr-head { min-height: 54px; padding: 9px 12px; flex-wrap: wrap; }
+            .thread-actions { flex-basis: 100%; justify-content: flex-end; }
+            .msgr-title { min-width: 0; }
+            .meta { flex-wrap: wrap; }
+            .meta strong { overflow-wrap: anywhere; }
+            .sess .meta { flex-wrap: wrap; }
+            .ftabs { overflow-x: auto; flex-shrink: 0; }
+            .ftabs button { flex-shrink: 0; }
             .mrow { padding: 1px 12px; }
             .mrow .fava { width: 34px; height: 34px; font-size: 12px; }
             .bub { font-size: 13.5px; padding: 6px 10px; }
@@ -308,8 +336,12 @@
     </div>
     <div class="card hidden" id="dash">
         <div class="dash-sidebar">
-            <div class="msgr-list-head"><strong>Messages</strong></div>
-            <div class="msgr-convos" id="dash-convos"></div>
+            <div class="sidebar-scroll">
+                <div class="msgr-list-head"><strong>Servers</strong><button type="button" id="server-create">+ Create</button></div>
+                <div class="msgr-convos" id="dash-servers"></div>
+                <div class="msgr-list-head"><strong>Messages</strong></div>
+                <div class="msgr-convos" id="dash-convos"></div>
+            </div>
             <div class="msgr-me" id="dash-me">
                 <div class="fava" id="dash-me-ava"><span id="dash-me-initial">?</span></div>
                 <div class="msgr-me-info">
@@ -393,16 +425,50 @@
                         <h2 id="chat-name">@</h2>
                         <p class="chat-status"><i class="pdot-mini" id="chat-dot"></i><span id="chat-status">Offline</span></p>
                     </div>
+                    <div class="thread-actions hidden" id="server-actions">
+                        <button type="button" id="server-members">Members</button>
+                        <button type="button" id="server-invite" class="hidden">Invite</button>
+                    </div>
                 </div>
                 <div class="chat-log" id="chat-log"></div>
                 <div class="msgr-composer">
+                    <div id="mention-options" class="mention-options hidden" role="listbox" aria-label="Mention a participant"></div>
                     <form id="chat-form">
-                        <input id="chat-input" maxlength="2000" placeholder="Message…" autocomplete="off">
+                        <input id="chat-input" maxlength="2000" placeholder="Message…" autocomplete="off" aria-label="Message" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="mention-options">
                         <button type="submit" id="chat-send">➤</button>
                     </form>
                     <p id="chat-msg"></p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="server-dialog" role="dialog" aria-modal="true" aria-labelledby="server-dialog-title">
+        <div class="modal-card">
+            <button type="button" class="modal-close" id="server-dialog-close" aria-label="Close server dialog">×</button>
+            <h2 id="server-dialog-title">Create a server</h2>
+            <form id="server-create-form" class="hidden">
+                <p class="fhint">A little space for your group. One shared chat to start.</p>
+                <label for="server-name">Server name</label>
+                <input id="server-name" maxlength="60" placeholder="Your group name" autocomplete="off" required>
+                <button type="submit" id="server-create-submit">Create server</button>
+            </form>
+            <div id="server-invite-panel" class="hidden">
+                <p class="fhint">Anyone with this link can sign in and join. Replace it to stop new joins through the old link.</p>
+                <label for="server-invite-link">Invite link</label>
+                <input id="server-invite-link" readonly>
+                <div class="modal-actions">
+                    <button type="button" id="server-invite-copy">Copy link</button>
+                    <button type="button" class="ghost" id="server-invite-rotate">Replace link</button>
+                </div>
+            </div>
+            <div id="server-members-list" class="hidden"></div>
+            <div id="server-join-panel" class="hidden">
+                <p id="server-join-name"></p>
+                <p class="fhint" id="server-join-info"></p>
+                <button type="button" id="server-join-submit">Join server</button>
+            </div>
+            <p id="server-error" role="status"></p>
         </div>
     </div>
 
@@ -479,6 +545,7 @@
         let myStatus = localStorage.getItem('status') || 'online';
         let friendsTimer = null;
         let confirmResolve = null;
+        let confirmOpener = null;
         let ctxUser = null;
         let profileUser = null;
         let msgCtxMsg = null;
@@ -505,28 +572,28 @@
         function startPresence() {
             setMyStatus(myStatus, true);
             clearInterval(friendsTimer);
-            clearInterval(chatThreadsTimer);
             friendsTimer = setInterval(() => {
                 loadFriends(true);
-                loadThreads(true);
+                if (!summaryLoads) loadSummaries();
             }, SYNC_EVERY);
-            chatThreadsTimer = setInterval(() => loadThreads(true), THREADS_EVERY);
         }
 
-        function loggedIn(token, email) {
+        function loggedIn(token, email, id) {
             localStorage.setItem('token', token);
             if (email) localStorage.setItem('email', email);
+            if (id) localStorage.setItem('userId', id);
             showDash();
         }
 
         function clearAuth() {
-            localStorage.clear();
+            ['token', 'email', 'username', 'avatar', 'bio', 'status', 'userId'].forEach((key) => localStorage.removeItem(key));
             location.reload();
         }
 
         function askConfirm(opts) {
             const o = opts || {};
             if (!$('confirm').classList.contains('hidden')) closeConfirm(false);
+            confirmOpener = document.activeElement;
             $('confirm-title').textContent = o.title || 'Are you sure?';
             $('confirm-text').textContent = o.text || '';
             $('confirm-ok').textContent = o.ok || 'Confirm';
@@ -541,6 +608,8 @@
             $('confirm').classList.add('hidden');
             const fn = confirmResolve;
             confirmResolve = null;
+            if (confirmOpener && confirmOpener.isConnected) confirmOpener.focus();
+            confirmOpener = null;
             if (fn) fn(result);
         }
 
@@ -672,18 +741,27 @@
             }
         }
 
-        function showDash() {
+        async function showDash() {
             $('auth-card').classList.add('hidden');
             $('dash').classList.remove('hidden');
             setIdent();
             setAvatar(null);
             setBio(localStorage.getItem('bio') || '');
             setChatMe();
-            loadSessions();
+            await loadSessions();
+            readAccount = localStorage.getItem('email') || '';
+            chatLastSeen = {};
+            const prefix = 'read:' + readAccount + ':';
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith(prefix)) mergeReadCursor(key.slice(prefix.length), localStorage.getItem(key));
+            }
             loadFriends();
             startPresence();
             renderConversations();
-            loadThreads(true);
+            renderServers();
+            loadSummaries();
+            checkInvite();
         }
 
         function renderSessions(list) {
@@ -750,6 +828,7 @@
                 return;
             }
             if (out.data.email) setIdent(out.data.email, out.data.username);
+            if (out.data.id) localStorage.setItem('userId', out.data.id);
             if (out.data.status) setMyStatus(out.data.status, true);
             if (typeof out.data.bio === 'string') {
                 localStorage.setItem('bio', out.data.bio);
@@ -895,7 +974,7 @@
             };
             $('f-c-all').textContent = friendData.friends.length;
             $('f-c-pending').textContent = friendData.incoming.length + friendData.outgoing.length;
-            if (chat) {
+            if (chat && chat.kind === 'dm') {
                 const u = friendData.friends.find((f) => f.id === chat.id);
                 if (u) {
                     chat.user = { ...chat.user, ...u };
@@ -928,7 +1007,7 @@
 
         function friendRow(u, status, actions, opts) {
             const row = document.createElement('div');
-            row.className = 'frow' + (chat && chat.id === u.id ? ' chatting' : '');
+            row.className = 'frow' + (chat && chat.kind === 'dm' && chat.id === u.id ? ' chatting' : '');
 
             row.oncontextmenu = (e) => {
                 e.preventDefault();
@@ -1054,7 +1133,7 @@
             if (out.res.status === 401) return clearAuth();
             if (!out.res.ok) return friendMsg(out.data.error || 'Could not remove.');
             friendMsg('');
-            if (chat && chat.id === id) backToList();
+            if (chat && chat.kind === 'dm' && chat.id === id) backToList();
             if (profileUser && profileUser.id === id) $('profile').classList.add('hidden');
             loadFriends();
         }
@@ -1160,10 +1239,78 @@
         };
 
         const CHAT_EVERY = 10 * 1000;
-        const THREADS_EVERY = 60 * 1000;
         let chatThreads = [];
-        let chatThreadsTimer = null;
-        const chatLastSeen = {};
+        let servers = [];
+        let chatLastSeen = {};
+        let readAccount = '';
+        let threadsRequest = 0;
+        let serversRequest = 0;
+        let summaryLoads = 0;
+        let serverDialog = null;
+        let mentionChoice = null;
+        const myId = () => Number(localStorage.getItem('userId'));
+        const conversationKey = (kind, id) => `${kind}:${id}`;
+        const seenId = (key) => Number.isSafeInteger(chatLastSeen[key]) ? chatLastSeen[key] : 0;
+
+        function mergeReadCursor(key, value) {
+            const id = Number(value);
+            if (/^(dm|server):[1-9]\d*$/.test(key) && Number.isSafeInteger(id) && id > seenId(key)) chatLastSeen[key] = id;
+        }
+
+        function markChatRead() {
+            const box = $('chat-log');
+            if (!chat || !chat.visibleMax || document.visibilityState !== 'visible' || !box.clientHeight) return;
+            if (document.querySelector('.modal:not(.hidden)') || box.scrollHeight - box.scrollTop - box.clientHeight >= 60) return;
+            if (chat.visibleMax <= seenId(chat.key)) return;
+            const key = 'read:' + readAccount + ':' + chat.key;
+            mergeReadCursor(chat.key, chat.visibleMax);
+            try {
+                mergeReadCursor(chat.key, localStorage.getItem(key));
+                localStorage.setItem(key, String(seenId(chat.key)));
+            } catch {}
+            renderConversations();
+            renderServers();
+        }
+
+        window.addEventListener('storage', (e) => {
+            const prefix = 'read:' + readAccount + ':';
+            if (e.storageArea !== localStorage || !e.key?.startsWith(prefix)) return;
+            mergeReadCursor(e.key.slice(prefix.length), e.newValue);
+            renderConversations();
+            renderServers();
+        });
+
+        $('chat-log').addEventListener('scroll', markChatRead);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                if (chat && !chat.loading) loadChat(true, false);
+                if (!summaryLoads) loadSummaries();
+            }
+        });
+
+        function appendUnread(btn, thread, key) {
+            if (!thread) return;
+            const mentioned = thread.mentionId > seenId(key);
+            if (!mentioned && thread.incomingId <= seenId(key)) return;
+            const badge = document.createElement('span');
+            badge.className = 'conv-badge' + (mentioned ? ' mention-badge' : '');
+            badge.textContent = mentioned ? '@' : '1';
+            badge.title = mentioned ? 'Unread mention' : 'New message';
+            btn.append(badge);
+        }
+
+        function appendMessageText(box, m) {
+            let end = 0;
+            for (const mention of m.mentions) {
+                box.append(document.createTextNode(m.text.slice(end, mention.start)));
+                const span = document.createElement('span');
+                span.className = 'mention' + (mention.id === myId() ? ' self' : '');
+                span.textContent = m.text.slice(mention.start, mention.end);
+                box.append(span);
+                end = mention.end;
+            }
+            box.append(document.createTextNode(m.text.slice(end)));
+        }
 
         function fmtTime(t) {
             return new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -1184,6 +1331,9 @@
         }
 
         function setChatHeader(u) {
+            $('server-actions').classList.add('hidden');
+            $('chat-dot').classList.remove('hidden');
+            $('chat-ava').className = 'fava';
             $('chat-name').textContent = u.username ? '@' + u.username : (u.email || 'Chat');
             $('chat-initial').textContent = ((u.username || u.email || '?')[0] || '?').toUpperCase();
             $('chat-dot').className = 'pdot-mini ' + presenceClass(u.status);
@@ -1201,9 +1351,11 @@
 
         function renderMessage(m, prev) {
             const isMine = m.mine;
-            const startGroup = !prev || prev.mine !== isMine || !sameDay(prev.t, m.t) || m.t - prev.t > 300;
+            const sender = m.sender;
+            const startGroup = !prev || prev.sender.id !== sender.id || !sameDay(prev.t, m.t) || m.t - prev.t > 300;
             const row = document.createElement('div');
-            row.className = 'mrow' + (isMine ? ' mine' : '') + (startGroup ? ' grp' : '');
+            row.dataset.messageId = m.id;
+            row.className = 'mrow' + (isMine ? ' mine' : '') + (startGroup ? ' grp' : '') + (m.mentions.some((r) => r.id === myId()) ? ' mentioned' : '');
             row.oncontextmenu = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1215,13 +1367,13 @@
                 ava.className = 'fava' + (startGroup ? '' : ' ghost');
                 if (startGroup) {
                     const initial = document.createElement('span');
-                    initial.textContent = ((chat.user.username || chat.user.email || '?')[0] || '?').toUpperCase();
+                    initial.textContent = (sender.username || '?')[0].toUpperCase();
                     ava.append(initial);
-                    if (chat.user.avatar) {
+                    if (sender.avatar) {
                         const img = document.createElement('img');
                         img.alt = '';
                         img.onerror = () => img.remove();
-                        img.src = chat.user.avatar;
+                        img.src = sender.avatar;
                         ava.append(img);
                     }
                 }
@@ -1234,7 +1386,7 @@
                 const meta = document.createElement('div');
                 meta.className = 'meta';
                 const name = document.createElement('strong');
-                name.textContent = isMine ? 'You' : (chat.user.username ? '@' + chat.user.username : chat.user.email);
+                name.textContent = isMine ? 'You' : (sender.username ? '@' + sender.username : 'Member');
                 const when = document.createElement('time');
                 when.textContent = fmtTime(m.t);
                 when.title = new Date(m.t * 1000).toLocaleString();
@@ -1243,7 +1395,7 @@
             }
             const bub = document.createElement('div');
             bub.className = 'bub';
-            bub.textContent = m.text;
+            appendMessageText(bub, m);
             body.append(bub);
 
             row.append(body);
@@ -1276,13 +1428,14 @@
 
         async function deleteMessage(m) {
             if (!chat) return;
+            const target = chat;
             const ok = await askConfirm({
                 title: 'Delete message?',
-                text: 'Delete this message? It will be removed for both of you.',
+                text: 'Hide this message from everyone in this conversation? Its data stays in the database.',
                 ok: 'Delete',
                 danger: true
             });
-            if (!ok) return;
+            if (!ok || chat !== target) return;
             let out;
             try {
                 out = await post({ action: 'delete', id: m.id }, localStorage.getItem('token'));
@@ -1291,9 +1444,9 @@
             }
             if (out.res.status === 401) return clearAuth();
             if (!out.res.ok) return notify(out.data.error || 'Could not delete the message.', 'error');
-            notify('Message deleted.', 'success');
-            await loadChat(true, true);
-            await loadThreads(true);
+            notify('Message hidden. Data retained.', 'success');
+            if (chat === target) await loadChat(false, false);
+            await loadSummaries();
         }
 
         function closeMsgCtx() {
@@ -1323,15 +1476,31 @@
             };
         });
 
+        function setServerHeader(server) {
+            $('chat-name').textContent = server.name;
+            $('chat-initial').textContent = server.name[0].toUpperCase();
+            $('chat-ava').className = 'fava server-icon';
+            $('chat-ava').querySelectorAll('img').forEach((img) => img.remove());
+            $('chat-dot').classList.add('hidden');
+            $('chat-status').textContent = `${server.count} member${server.count === 1 ? '' : 's'} · Shared chat`;
+            $('server-actions').classList.remove('hidden');
+            $('server-invite').classList.toggle('hidden', server.owner !== myId());
+        }
+
         function renderChat(data, force) {
             if (!chat) return;
-            if (data.user) {
+            if (chat.kind === 'server') {
+                chat.server = data.server;
+                setServerHeader(data.server);
+            } else {
                 chat.user = data.user;
-                setChatHeader(chat.user);
+                setChatHeader(data.user);
             }
-
+            chat.members = data.members;
             const box = $('chat-log');
             const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+            const previousTop = box.scrollTop;
+            chat.visibleMax = Math.max(0, ...data.messages.map((m) => m.id));
             box.textContent = '';
             if (!data.messages || !data.messages.length) {
                 const p = document.createElement('p');
@@ -1354,40 +1523,40 @@
                     prev = m;
                 });
             }
-            if (force || atBottom) box.scrollTop = box.scrollHeight;
+            box.scrollTop = force || atBottom ? box.scrollHeight : previousTop;
+            markChatRead();
         }
 
         async function loadChat(quiet, force) {
             if (!chat) return;
-            const id = chat.id;
+            const target = chat;
+            const request = ++target.request;
+            const token = localStorage.getItem('token');
+            target.loading = true;
             let out;
             try {
-                out = await post({ action: 'messages', id }, localStorage.getItem('token'));
+                out = await post({ action: 'messages', kind: target.kind, id: target.id }, token);
             } catch {
-                if (!quiet) $('chat-msg').textContent = 'Network error — could not load messages.';
+                if (chat === target && request === target.request && !quiet) $('chat-msg').textContent = 'Network error — could not load messages.';
                 return;
+            } finally {
+                if (request === target.request) target.loading = false;
             }
-            if (!chat || chat.id !== id) return;
+            if (chat !== target || request !== target.request || token !== localStorage.getItem('token')) return;
             if (out.res.status === 401) return clearAuth();
             if (!out.res.ok) {
-                if (!quiet) $('chat-msg').textContent = out.data.error || 'Could not load messages.';
+                $('chat-msg').textContent = out.data.error || 'Could not load messages.';
                 return;
             }
             $('chat-msg').textContent = '';
             renderChat(out.data, force);
-            if (out.data.messages && out.data.messages.length) {
-                const max = Math.max(...out.data.messages.map((m) => m.t));
-                const before = chatLastSeen[id] || 0;
-                chatLastSeen[id] = Math.max(max, before);
-                if (chatLastSeen[id] > before) renderConversations();
-            }
         }
 
         function convAvatar(u) {
             const ava = document.createElement('div');
             ava.className = 'fava';
             const initial = document.createElement('span');
-            initial.textContent = ((u.username || u.email)[0] || '?').toUpperCase();
+            initial.textContent = (u.username || u.email || '?')[0].toUpperCase();
             ava.append(initial);
             if (u.avatar) {
                 const img = document.createElement('img');
@@ -1425,7 +1594,7 @@
             list.forEach((u) => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'conv' + (chat && chat.id === u.id ? ' on' : '');
+                btn.className = 'conv' + (chat && chat.kind === 'dm' && chat.id === u.id ? ' on' : '');
                 btn.append(convAvatar(u));
                 const info = document.createElement('div');
                 info.className = 'conv-info';
@@ -1443,61 +1612,326 @@
                 const when = document.createElement('time');
                 when.textContent = u.thread ? ago(u.thread.t) : '';
                 btn.append(when);
-                const unread = u.thread && !u.thread.mine && u.thread.t > (chatLastSeen[u.id] || 0) && !(chat && chat.id === u.id);
-                if (unread) {
-                    const badge = document.createElement('span');
-                    badge.className = 'conv-badge';
-                    badge.textContent = '1';
-                    badge.title = 'New message';
-                    btn.append(badge);
-                }
+                appendUnread(btn, u.thread, conversationKey('dm', u.id));
                 btn.onclick = () => selectChat(u);
                 box.append(btn);
             });
         }
 
-        async function loadThreads(quiet) {
-            let out;
-            try {
-                out = await post({ action: 'threads' }, localStorage.getItem('token'));
-            } catch {
-                return;
+        function renderServers() {
+            const box = $('dash-servers');
+            box.textContent = '';
+            if (!servers.length) {
+                const empty = document.createElement('p');
+                empty.className = 'conv-empty';
+                empty.textContent = 'Create a space, or open an invite link to join one.';
+                box.append(empty);
             }
+            for (const server of servers) {
+                const key = conversationKey('server', server.id);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'conv' + (chat && chat.key === key ? ' on' : '');
+                btn.dataset.serverId = server.id;
+                const icon = document.createElement('div');
+                icon.className = 'fava server-icon';
+                icon.textContent = server.name[0].toUpperCase();
+                const info = document.createElement('div');
+                info.className = 'conv-info';
+                const name = document.createElement('strong');
+                name.textContent = server.name;
+                const preview = document.createElement('span');
+                preview.textContent = server.thread ? server.thread.text : `${server.count} members · Shared chat`;
+                if (server.thread && server.thread.mine) preview.className = 'mine';
+                info.append(name, preview);
+                btn.append(icon, info);
+                appendUnread(btn, server.thread, key);
+                btn.onclick = () => selectServer(server);
+                box.append(btn);
+            }
+        }
+
+        async function loadThreads() {
+            const request = ++threadsRequest;
+            const token = localStorage.getItem('token');
+            let out;
+            try { out = await post({ action: 'threads' }, token); } catch { return; }
+            if (request !== threadsRequest || token !== localStorage.getItem('token')) return;
             if (out.res.status === 401) return clearAuth();
             if (!out.res.ok) return;
-            chatThreads = out.data.threads || [];
+            chatThreads = out.data.threads;
             renderConversations();
         }
 
-        function selectChat(u) {
+        async function loadServers() {
+            const request = ++serversRequest;
+            const token = localStorage.getItem('token');
+            let out;
+            try { out = await post({ action: 'servers' }, token); } catch {
+                if (request === serversRequest && !servers.length) $('dash-servers').textContent = 'Could not load servers. Refresh to retry.';
+                return;
+            }
+            if (request !== serversRequest || token !== localStorage.getItem('token')) return;
+            if (out.res.status === 401) return clearAuth();
+            if (!out.res.ok) {
+                if (!servers.length) $('dash-servers').textContent = out.data.error || 'Could not load servers.';
+                return;
+            }
+            servers = out.data.servers;
+            renderServers();
+            if (chat && chat.kind === 'server') {
+                const server = servers.find((s) => s.id === chat.id);
+                if (server) { chat.server = server; setServerHeader(server); }
+            }
+        }
+
+        async function loadSummaries() {
+            if (!localStorage.getItem('token')) return;
+            summaryLoads++;
+            try { await Promise.all([loadThreads(), loadServers()]); } finally { summaryLoads--; }
+        }
+
+        function activateChat(kind, entry) {
             if (chat && chat.timer) clearInterval(chat.timer);
-            chat = { id: u.id, user: u, timer: null };
-            setChatHeader(u);
-            $('chat-log').textContent = '';
+            closeMsgCtx();
+            hideMentionOptions();
+            chat = { kind, key: conversationKey(kind, entry.id), id: entry.id, user: kind === 'dm' ? entry : null, server: kind === 'server' ? entry : null, members: [], timer: null, request: 0, loading: false, sending: false, visibleMax: 0 };
+            if (kind === 'server') setServerHeader(entry); else setChatHeader(entry);
+            $('chat-log').textContent = 'Loading messages…';
             $('chat-msg').textContent = '';
             $('chat-input').value = '';
+            $('chat-send').disabled = false;
             $('dash-home').classList.add('hidden');
             $('dash-thread').classList.remove('hidden');
             $('dash').classList.add('open-thread');
-            if (u.thread) {
-                chatLastSeen[u.id] = Math.max(chatLastSeen[u.id] || 0, u.thread.t);
-            }
             renderConversations();
+            renderServers();
             renderFriendTab();
-            loadChat(true, true);
-            chat.timer = setInterval(() => loadChat(true, false), CHAT_EVERY);
+            loadChat(false, true);
+            chat.timer = setInterval(() => { if (chat && !chat.loading) loadChat(true, false); }, CHAT_EVERY);
             $('chat-input').focus();
         }
+
+        function selectChat(u) { activateChat('dm', u); }
+        function selectServer(server) { activateChat('server', server); }
 
         function backToList() {
             if (chat && chat.timer) clearInterval(chat.timer);
             chat = null;
+            closeMsgCtx();
+            hideMentionOptions();
             $('dash-home').classList.remove('hidden');
             $('dash-thread').classList.add('hidden');
             $('dash').classList.remove('open-thread');
             renderConversations();
+            renderServers();
             renderFriendTab();
         }
+
+        function hideMentionOptions() {
+            mentionChoice = null;
+            $('mention-options').classList.add('hidden');
+            $('chat-input').setAttribute('aria-expanded', 'false');
+            $('chat-input').removeAttribute('aria-activedescendant');
+        }
+
+        function selectMention(index) {
+            const choice = mentionChoice;
+            if (!choice || !chat || choice.chat !== chat) return;
+            const input = $('chat-input');
+            const replacement = '@' + choice.users[index].username + ' ';
+            if (input.value.length - (choice.end - choice.start) + replacement.length > input.maxLength) return;
+            input.setRangeText(replacement, choice.start, choice.end, 'end');
+            hideMentionOptions();
+            input.focus();
+        }
+
+        function updateMentionOptions() {
+            hideMentionOptions();
+            if (!chat) return;
+            const input = $('chat-input');
+            if (input.selectionStart !== input.selectionEnd) return;
+            const end = input.selectionStart;
+            const match = input.value.slice(0, end).match(/(?:^|[^\w.@])@([a-z0-9._]{0,20})$/i);
+            if (!match || /^[\w.@]/.test(input.value.slice(end))) return;
+            const users = chat.members.filter((u) => u.username && u.username !== 'everyone' && u.username.toLowerCase().startsWith(match[1].toLowerCase())).slice(0, 8);
+            if (!users.length) return;
+            mentionChoice = { chat, users, start: end - match[1].length - 1, end, index: 0 };
+            const box = $('mention-options');
+            box.textContent = '';
+            users.forEach((u, i) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.id = 'mention-option-' + i;
+                button.setAttribute('role', 'option');
+                button.setAttribute('aria-selected', String(i === 0));
+                button.tabIndex = -1;
+                button.textContent = '@' + u.username;
+                button.onmousedown = (e) => e.preventDefault();
+                button.onclick = () => selectMention(i);
+                box.append(button);
+            });
+            box.classList.remove('hidden');
+            input.setAttribute('aria-expanded', 'true');
+            input.setAttribute('aria-activedescendant', 'mention-option-0');
+        }
+
+        $('chat-input').addEventListener('input', updateMentionOptions);
+        $('chat-input').addEventListener('click', updateMentionOptions);
+        $('chat-input').addEventListener('keydown', (e) => {
+            if (!mentionChoice || e.isComposing) return;
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); hideMentionOptions(); return; }
+            if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectMention(mentionChoice.index); return; }
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') { if (e.key.startsWith('Arrow')) hideMentionOptions(); return; }
+            e.preventDefault();
+            mentionChoice.index = (mentionChoice.index + (e.key === 'ArrowDown' ? 1 : -1) + mentionChoice.users.length) % mentionChoice.users.length;
+            $('mention-options').querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-selected', String(i === mentionChoice.index)));
+            const active = $('mention-option-' + mentionChoice.index);
+            $('chat-input').setAttribute('aria-activedescendant', active.id);
+            active.scrollIntoView({ block: 'nearest' });
+        });
+        document.addEventListener('click', (e) => { if (!e.target.closest('#chat-input, #mention-options')) hideMentionOptions(); });
+
+        function openServerDialog(mode, target, code) {
+            closeServerDialog(true);
+            hideMentionOptions();
+            const state = { mode, target, code, busy: false, opener: document.activeElement };
+            serverDialog = state;
+            $('server-error').textContent = '';
+            for (const id of ['server-create-form', 'server-invite-panel', 'server-members-list', 'server-join-panel']) $(id).classList.add('hidden');
+            $('server-dialog').querySelectorAll('button').forEach((b) => { b.disabled = false; });
+            $('server-dialog-title').textContent = { create: 'Create a server', invite: 'Invite your group', members: 'Members', join: 'Server invitation' }[mode];
+            $('server-dialog').classList.remove('hidden');
+            $('server-dialog-close').focus();
+            return state;
+        }
+
+        function closeServerDialog(replacing = false) {
+            const previous = serverDialog;
+            serverDialog = null;
+            $('server-dialog').classList.add('hidden');
+            if (!replacing && previous && previous.mode === 'join' && new URLSearchParams(location.hash.slice(1)).get('invite') === previous.code) {
+                history.replaceState(null, '', location.pathname + location.search);
+            }
+            if (!replacing && previous) {
+                if (previous.opener && previous.opener.isConnected) previous.opener.focus();
+                markChatRead();
+            }
+        }
+
+        async function serverRequest(state, payload) {
+            if (state !== serverDialog || state.busy) return null;
+            state.busy = true;
+            $('server-error').textContent = '';
+            $('server-dialog').querySelectorAll('button:not(.modal-close)').forEach((b) => { b.disabled = true; });
+            const token = localStorage.getItem('token');
+            try {
+                const out = await post(payload, token);
+                if (state !== serverDialog || token !== localStorage.getItem('token')) return null;
+                if (out.res.status === 401) { clearAuth(); return null; }
+                if (!out.res.ok) { $('server-error').textContent = out.data.error || 'Could not complete the request.'; return null; }
+                return out.data;
+            } catch {
+                if (state === serverDialog) $('server-error').textContent = 'Network error — please try again.';
+                return null;
+            } finally {
+                state.busy = false;
+                if (state === serverDialog) $('server-dialog').querySelectorAll('button:not(.modal-close)').forEach((b) => { b.disabled = false; });
+            }
+        }
+
+        $('server-dialog-close').onclick = () => closeServerDialog();
+        $('server-dialog').onclick = (e) => { if (e.target === $('server-dialog')) closeServerDialog(); };
+        $('server-create').onclick = () => {
+            openServerDialog('create');
+            $('server-create-form').classList.remove('hidden');
+            $('server-name').value = '';
+            $('server-name').focus();
+        };
+        $('server-create-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const state = serverDialog;
+            if (!state || state.mode !== 'create') return;
+            const out = await serverRequest(state, { action: 'server-create', name: $('server-name').value.trim() });
+            if (!out) return;
+            closeServerDialog();
+            selectServer(out.server);
+            loadServers();
+            notify('Server created. Use Invite to bring your group in.', 'success');
+        };
+        $('server-invite').onclick = async () => {
+            if (!chat || chat.kind !== 'server') return;
+            const state = openServerDialog('invite', chat.server);
+            const out = await serverRequest(state, { action: 'server-invite', id: state.target.id });
+            if (!out) return;
+            $('server-invite-link').value = location.origin + '/#invite=' + encodeURIComponent(out.code);
+            $('server-invite-panel').classList.remove('hidden');
+        };
+        $('server-invite-copy').onclick = async () => {
+            try { await navigator.clipboard.writeText($('server-invite-link').value); notify('Invite link copied.', 'success'); }
+            catch { $('server-invite-link').select(); $('server-error').textContent = 'Copy the selected link manually.'; }
+        };
+        $('server-invite-rotate').onclick = async () => {
+            const state = serverDialog;
+            if (!state || state.mode !== 'invite' || state.busy) return;
+            const ok = await askConfirm({ title: 'Replace invite link?', text: 'The old link will stop working. Existing members stay in the server.', ok: 'Replace' });
+            if (!ok || state !== serverDialog) return;
+            const out = await serverRequest(state, { action: 'server-invite', id: state.target.id, rotate: true });
+            if (out) $('server-invite-link').value = location.origin + '/#invite=' + encodeURIComponent(out.code);
+        };
+        $('server-members').onclick = async () => {
+            if (!chat || chat.kind !== 'server') return;
+            const state = openServerDialog('members', chat.server);
+            const out = await serverRequest(state, { action: 'server-members', id: state.target.id });
+            if (!out) return;
+            const box = $('server-members-list');
+            box.textContent = '';
+            out.members.forEach((u) => {
+                const row = document.createElement('div');
+                row.className = 'frow';
+                const info = document.createElement('div');
+                info.className = 'finfo';
+                const name = document.createElement('strong');
+                name.textContent = u.username ? '@' + u.username : 'Member';
+                const status = document.createElement('span');
+                status.textContent = u.id === out.server.owner ? 'Owner' : (PRESENCE_LABEL[u.status] || 'Member');
+                info.append(name, status);
+                row.append(convAvatar(u), info);
+                box.append(row);
+            });
+            box.classList.remove('hidden');
+        };
+
+        async function checkInvite() {
+            const code = new URLSearchParams(location.hash.slice(1)).get('invite');
+            if (!code) {
+                if (serverDialog && serverDialog.mode === 'join') closeServerDialog();
+                return;
+            }
+            if (!localStorage.getItem('token')) {
+                $('msg').textContent = 'Sign in or create an account to view your server invitation.';
+                return;
+            }
+            if (serverDialog && serverDialog.mode === 'join' && serverDialog.code === code) return;
+            const state = openServerDialog('join', null, code);
+            const out = await serverRequest(state, { action: 'invite-preview', code });
+            if (!out) return;
+            state.target = out.server;
+            $('server-join-name').textContent = out.server.name;
+            $('server-join-info').textContent = `${out.server.count} members. Joining gives you access to the shared chat and its history.`;
+            $('server-join-submit').textContent = out.joined ? 'Open server' : 'Join server';
+            $('server-join-panel').classList.remove('hidden');
+        }
+        window.addEventListener('hashchange', checkInvite);
+        $('server-join-submit').onclick = async () => {
+            const state = serverDialog;
+            if (!state || state.mode !== 'join') return;
+            const out = await serverRequest(state, { action: 'invite-join', code: state.code });
+            if (!out) return;
+            closeServerDialog();
+            selectServer(out.server);
+            loadServers();
+        };
 
         function setChatMe() {
             const email = localStorage.getItem('email') || '';
@@ -1540,34 +1974,41 @@
 
         $('chat-form').onsubmit = async (e) => {
             e.preventDefault();
-            if (!chat) return;
+            if (!chat || chat.sending) return;
+            const target = chat;
             const input = $('chat-input');
-            const text = input.value.trim();
+            const draft = input.value;
+            const text = draft.trim();
             if (!text) return;
-
-            const btn = $('chat-send');
-            btn.disabled = true;
+            hideMentionOptions();
+            target.sending = true;
+            $('chat-send').disabled = true;
             $('chat-msg').textContent = '';
-
+            const token = localStorage.getItem('token');
             let out;
             try {
-                out = await post({ action: 'send', id: chat.id, text }, localStorage.getItem('token'));
+                out = await post({ action: 'send', kind: target.kind, id: target.id, text }, token);
             } catch {
-                btn.disabled = false;
-                $('chat-msg').textContent = 'Network error — message not sent.';
+                if (chat === target) $('chat-msg').textContent = 'Network error — message not sent.';
+                else notify('Message could not be sent to the previous conversation.', 'error');
                 return;
+            } finally {
+                target.sending = false;
+                if (chat === target) $('chat-send').disabled = false;
             }
-            btn.disabled = false;
+            if (token !== localStorage.getItem('token')) return;
             if (out.res.status === 401) return clearAuth();
             if (!out.res.ok) {
-                $('chat-msg').textContent = out.data.error || 'Could not send the message.';
+                if (chat === target) $('chat-msg').textContent = out.data.error || 'Could not send the message.';
+                else notify(out.data.error || 'Could not send the message.', 'error');
                 return;
             }
-
-            input.value = '';
-            await loadChat(true, true);
-            await loadThreads(true);
-            input.focus();
+            if (chat === target) {
+                if (input.value === draft) input.value = '';
+                await loadChat(false, true);
+            }
+            await loadSummaries();
+            if (chat === target && !serverDialog) input.focus();
         };
 
         function showOtp(note) {
@@ -1725,13 +2166,22 @@
         $('crop-zoom').oninput = (e) => setZoom(Number(e.target.value));
         $('crop').onclick = (e) => { if (e.target === $('crop')) closeCrop(); };
         document.onkeydown = (e) => {
+            const modal = !$('confirm').classList.contains('hidden') ? $('confirm') : serverDialog ? $('server-dialog') : null;
+            if (modal && e.key === 'Tab') {
+                const controls = [...modal.querySelectorAll('button:not(:disabled), input:not(:disabled)')].filter((el) => el.getClientRects().length);
+                const first = controls[0], last = controls[controls.length - 1];
+                if (!modal.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+                else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
             if (e.key !== 'Escape') return;
             if (!$('confirm').classList.contains('hidden')) return closeConfirm(false);
+            if (serverDialog) return closeServerDialog();
             if (!$('msg-ctx-menu').classList.contains('hidden')) return closeMsgCtx();
             if (!$('ctx-menu').classList.contains('hidden')) return closeCtx();
-            if ($('dash').classList.contains('open-thread')) return backToList();
             if (!$('profile').classList.contains('hidden')) return $('profile').classList.add('hidden');
             if (!$('crop').classList.contains('hidden')) return closeCrop();
+            if ($('dash').classList.contains('open-thread')) return backToList();
             $('status-menu').classList.add('hidden');
             $('status-btn').setAttribute('aria-expanded', 'false');
         };
@@ -1799,7 +2249,7 @@
             const { res, data } = out;
 
             if (res.ok) {
-                if (isLogin) return loggedIn(data.token, data.email);
+                if (isLogin) return loggedIn(data.token, data.email, data.id);
                 return showOtp(`Code sent to ${email}`);
             }
             if (res.status === 403 && data.verify) return showOtp('Enter the code we emailed you.');
@@ -1815,7 +2265,7 @@
                 return $('msg').textContent = 'Network error — could not reach the server.';
             }
             const { res, data } = out;
-            if (res.ok) return loggedIn(data.token, data.email);
+            if (res.ok) return loggedIn(data.token, data.email, data.id);
             $('msg').textContent = data.hint || data.error || `Request failed (${res.status})`;
         };
 
@@ -1850,6 +2300,7 @@
         };
 
         if (localStorage.getItem('token')) showDash();
+        else checkInvite();
     </script>
 </body>
 </html>

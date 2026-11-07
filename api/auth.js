@@ -42,7 +42,12 @@ async function connectDB() {
         minPoolSize: 0,
         maxIdleTimeMS: 60000
       })
-      .then((m) => { db.conn = m; return m; })
+      .then(async (m) => {
+        // With buffering disabled, build chat indexes only after connecting.
+        await Promise.all([Server.createIndexes(), Msg.createIndexes()]);
+        db.conn = m;
+        return m;
+      })
       .catch((err) => { db.promise = null; throw err; });
   }
   return db.promise;
@@ -122,18 +127,44 @@ async function liveSession(userId, sid) {
   return { ...legacy, _id: key };
 }
 
+const mentionSchema = new mongoose.Schema({
+  u: { type: Number, required: true },
+  p: { type: Number, required: true },
+  l: { type: Number, required: true }
+}, { _id: false });
+
 const msgSchema = new mongoose.Schema({
   _id: { type: Number, required: true },
   a: { type: Number, required: true },
-  b: { type: Number, required: true },
+  b: { type: Number, required: function () { return this.s == null; } },
+  s: {
+    type: Number,
+    validate: {
+      validator: function (value) { return value == null || this.b == null; },
+      message: 'A message must have exactly one destination.'
+    }
+  },
   m: { type: String, required: true },
   t: { type: Number, default: nowSeconds },
-  d: { type: Number, default: 0 }
+  d: { type: Number, default: 0 },
+  r: { type: [mentionSchema], default: undefined }
 }, { versionKey: false });
 
 msgSchema.index({ a: 1, b: 1, t: -1 });
+msgSchema.index({ s: 1, t: -1, _id: -1 });
 
 const Msg = mongoose.models.Msg || mongoose.model('Msg', msgSchema, 'msgs');
+
+const serverSchema = new mongoose.Schema({
+  _id: { type: Number, required: true },
+  n: { type: String, required: true, trim: true, minlength: 1, maxlength: 60 },
+  o: { type: Number, required: true },
+  m: { type: [Number], index: true },
+  i: { type: String, required: true, unique: true },
+  c: { type: Number, default: nowSeconds }
+}, { versionKey: false });
+
+const Server = mongoose.models.Server || mongoose.model('Server', serverSchema, 'servers');
 
 const friendSchema = new mongoose.Schema({
   _id: String,
@@ -418,6 +449,7 @@ async function handleSessions(req, res) {
   }
 
   return res.status(200).json({
+    id: user._id,
     email: user.e,
     username,
     bio: user.b || '',
@@ -649,20 +681,236 @@ async function handleProfile(req, res, id) {
   return res.status(200).json({ user: publicUser(found.user) });
 }
 
-async function handleMessages(req, res, id) {
-  const found = await targetUser(req, res, id);
+function person(user) {
+  return {
+    id: user._id,
+    username: user.n || null,
+    avatar: user.av || null,
+    status: presenceOf(user)
+  };
+}
+
+function publicServer(server) {
+  return { id: server._id, name: server.n, owner: server.o, count: server.m.length };
+}
+
+async function serverForUser(res, id, me, ownerOnly = false) {
+  const sid = ['number', 'string'].includes(typeof id) ? Number(id) : NaN;
+  if (!Number.isSafeInteger(sid) || sid < 1) {
+    res.status(400).json({ error: 'Server id required.' });
+    return null;
+  }
+  const server = await Server.findById(sid).select(ownerOnly ? 'n o m i' : 'n o m').lean();
+  if (!server) {
+    res.status(404).json({ error: 'Server not found.' });
+    return null;
+  }
+  if (!server.m.includes(me) || (ownerOnly && server.o !== me)) {
+    res.status(403).json({ error: ownerOnly ? 'Only the server owner can manage invites.' : 'You must join this server first.' });
+    return null;
+  }
+  return server;
+}
+
+async function participants(ids) {
+  return User.find({ _id: { $in: ids } }).select('n av o i').sort({ _id: 1 }).lean();
+}
+
+async function targetConversation(req, res, id, kind = 'dm') {
+  let found;
+  if (kind === 'dm') {
+    found = await targetUser(req, res, id);
+    if (!found) return null;
+  } else {
+    const auth = await requireLiveSession(req);
+    if (!auth) {
+      res.status(401).json({ error: 'Please log in again.', expired: true });
+      return null;
+    }
+    if (kind !== 'server') {
+      res.status(400).json({ error: 'Conversation kind must be dm or server.' });
+      return null;
+    }
+    const server = await serverForUser(res, id, auth.userId);
+    if (!server) return null;
+    found = { auth, server };
+  }
+  const ids = found.server ? found.server.m : [found.auth.userId, found.other];
+  return { ...found, members: await participants(ids) };
+}
+
+function parseMentions(text, members) {
+  const byName = new Map(members.filter((u) => u.n).map((u) => [u.n.toLowerCase(), u._id]));
+  const mentions = [];
+  // Consume the entire handle before validating its length; indices are UTF-16 offsets.
+  for (const match of text.matchAll(/@[a-zA-Z0-9_.]+/g)) {
+    const name = match[0].slice(1).toLowerCase();
+    if (!USERNAME_RE.test(name) || name === 'everyone' || !byName.has(name)) continue;
+    const before = text.slice(0, match.index);
+    const after = text.slice(match.index + match[0].length);
+    // Do not recognize embedded email addresses or prefixes of longer handles.
+    if (/[\p{L}\p{N}\p{M}_.!#$%&'*+/=?^`{|}~@-]$/u.test(before)
+      || /^[\p{L}\p{N}\p{M}_.@+-]/u.test(after)) continue;
+    mentions.push({ u: byName.get(name), p: match.index, l: match[0].length });
+  }
+  return mentions;
+}
+
+function messagePayload(message, me, byId) {
+  return {
+    id: message._id,
+    mine: message.a === me,
+    text: message.m,
+    t: message.t,
+    sender: person(byId.get(message.a) || { _id: message.a }),
+    mentions: (message.r || []).map((r) => ({ id: r.u, start: r.p, end: r.p + r.l }))
+  };
+}
+
+async function messageSummaries(match, groupBy, me) {
+  return Msg.aggregate([
+    { $match: { ...match, d: { $ne: 1 } } },
+    { $sort: { t: -1, _id: -1 } },
+    { $group: {
+      _id: groupBy,
+      m: { $first: '$m' },
+      t: { $first: '$t' },
+      a: { $first: '$a' },
+      messageId: { $first: '$_id' },
+      incomingId: { $max: { $cond: [{ $ne: ['$a', me] }, '$_id', 0] } },
+      mentionId: { $max: { $cond: [
+        { $and: [{ $ne: ['$a', me] }, { $in: [me, { $ifNull: ['$r.u', []] }] }] },
+        '$_id',
+        0
+      ] } }
+    } },
+    { $sort: { t: -1, messageId: -1 } }
+  ]);
+}
+
+function threadPayload(row, me) {
+  return {
+    messageId: row.messageId,
+    text: row.m,
+    t: row.t,
+    mine: row.a === me,
+    incomingId: row.incomingId,
+    mentionId: row.mentionId
+  };
+}
+
+async function handleServerCreate(req, res, raw) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  if (typeof raw !== 'string' || !raw.trim() || raw.trim().length > 60) {
+    return res.status(400).json({ error: 'Server names must be 1–60 characters.' });
+  }
+  const name = raw.trim();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const last = await Server.findOne({ _id: { $type: 'number' } }).sort({ _id: -1 }).select('_id').lean();
+    try {
+      const server = await Server.create({
+        _id: (last ? last._id : 0) + 1,
+        n: name,
+        o: auth.userId,
+        m: [auth.userId],
+        i: crypto.randomBytes(24).toString('hex')
+      });
+      return res.status(200).json({ server: publicServer(server) });
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+    }
+  }
+  return res.status(500).json({ error: 'Could not create the server. Try again.' });
+}
+
+async function handleServers(req, res) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const servers = await Server.find({ m: auth.userId }).select('n o m').sort({ _id: 1 }).lean();
+  const rows = servers.length
+    ? await messageSummaries({ s: { $in: servers.map((s) => s._id) } }, '$s', auth.userId)
+    : [];
+  const byId = new Map(rows.map((r) => [r._id, threadPayload(r, auth.userId)]));
+  return res.status(200).json({
+    servers: servers.map((s) => ({ ...publicServer(s), thread: byId.get(s._id) || null }))
+  });
+}
+
+async function handleServerMembers(req, res, id) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+
+  const server = await serverForUser(res, id, auth.userId);
+  if (!server) return;
+  const members = await participants(server.m);
+  return res.status(200).json({ server: publicServer(server), members: members.map(person) });
+}
+
+async function handleServerInvite(req, res, id, rotate = false) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+  if (typeof rotate !== 'boolean') return res.status(400).json({ error: 'Rotate must be a boolean.' });
+
+  const server = await serverForUser(res, id, auth.userId, true);
+  if (!server) return;
+  if (!rotate) return res.status(200).json({ code: server.i });
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const updated = await Server.findOneAndUpdate(
+        { _id: server._id, o: auth.userId },
+        { $set: { i: crypto.randomBytes(24).toString('hex') } },
+        { returnDocument: 'after' }
+      ).select('i').lean();
+      if (!updated) return res.status(404).json({ error: 'Server not found.' });
+      return res.status(200).json({ code: updated.i });
+    } catch (err) {
+      if (err.code !== 11000) throw err;
+    }
+  }
+  return res.status(500).json({ error: 'Could not rotate the invite. Try again.' });
+}
+
+async function handleInvite(req, res, code, join) {
+  const auth = await requireLiveSession(req);
+  if (!auth) return res.status(401).json({ error: 'Please log in again.', expired: true });
+  if (typeof code !== 'string' || code.length !== 48 || !/^[a-f0-9]{48}$/.test(code)) {
+    return res.status(400).json({ error: 'Invalid invite code.' });
+  }
+
+  // Match the current code in the write itself, so rotation cannot revive an old invite.
+  const server = join
+    ? await Server.findOneAndUpdate({ i: code }, { $addToSet: { m: auth.userId } }, { returnDocument: 'after' }).select('n o m').lean()
+    : await Server.findOne({ i: code }).select('n m').lean();
+  if (!server) return res.status(404).json({ error: 'Invite not found.' });
+  if (join) return res.status(200).json({ server: publicServer(server) });
+  return res.status(200).json({
+    server: { id: server._id, name: server.n, count: server.m.length },
+    joined: server.m.includes(auth.userId)
+  });
+}
+
+async function handleMessages(req, res, id, kind) {
+  const found = await targetConversation(req, res, id, kind);
   if (!found) return;
   const me = found.auth.userId;
-  const other = found.other;
-
-  const docs = await Msg.find({
-    d: { $ne: 1 },
-    $or: [{ a: me, b: other }, { a: other, b: me }]
-  }).sort({ t: -1 }).limit(50).lean();
+  const match = found.server
+    ? { s: found.server._id }
+    : { s: { $exists: false }, $or: [{ a: me, b: found.other }, { a: found.other, b: me }] };
+  const docs = await Msg.find({ ...match, d: { $ne: 1 } }).sort({ t: -1, _id: -1 }).limit(50).lean();
+  const byId = new Map(found.members.map((u) => [u._id, u]));
+  const missingIds = [...new Set(docs.map((m) => m.a).filter((id) => !byId.has(id)))];
+  if (missingIds.length) {
+    for (const user of await participants(missingIds)) byId.set(user._id, user);
+  }
 
   return res.status(200).json({
-    user: publicUser(found.user),
-    messages: docs.reverse().map((m) => ({ id: m._id, mine: m.a === me, text: m.m, t: m.t }))
+    ...(found.server ? { server: publicServer(found.server) } : { user: publicUser(found.user) }),
+    members: found.members.map(person),
+    messages: docs.reverse().map((m) => messagePayload(m, me, byId))
   });
 }
 
@@ -672,44 +920,41 @@ async function handleThreads(req, res) {
 
   const me = auth.userId;
   const docs = await Friend.find({ $or: [{ a: me }, { b: me }], s: 'a' }).select('a b').lean();
-  const allowed = new Set(docs.map((f) => (f.a === me ? f.b : f.a)));
-  if (!allowed.size) return res.status(200).json({ threads: [] });
+  const allowed = docs.map((f) => (f.a === me ? f.b : f.a));
+  if (!allowed.length) return res.status(200).json({ threads: [] });
 
-  const rows = await Msg.aggregate([
-    { $match: { d: { $ne: 1 }, $or: [{ a: me }, { b: me }] } },
-    { $sort: { t: -1, _id: -1 } },
-    { $group: {
-      _id: { $cond: [{ $eq: ['$a', me] }, '$b', '$a'] },
-      m: { $first: '$m' },
-      t: { $first: '$t' },
-      a: { $first: '$a' }
-    } }
-  ]);
-
-  return res.status(200).json({
-    threads: rows
-      .filter((r) => allowed.has(r._id))
-      .map((r) => ({ id: r._id, text: r.m, t: r.t, mine: r.a === me }))
-  });
+  const rows = await messageSummaries({
+    s: { $exists: false },
+    $or: [{ a: me, b: { $in: allowed } }, { b: me, a: { $in: allowed } }]
+  }, { $cond: [{ $eq: ['$a', me] }, '$b', '$a'] }, me);
+  return res.status(200).json({ threads: rows.map((r) => ({ id: r._id, ...threadPayload(r, me) })) });
 }
 
-async function handleSend(req, res, id, raw) {
-  const found = await targetUser(req, res, id);
+async function handleSend(req, res, id, raw, kind) {
+  const found = await targetConversation(req, res, id, kind);
   if (!found) return;
 
-  const text = String(raw == null ? '' : raw).trim();
+  if (typeof raw !== 'string') return res.status(400).json({ error: 'Message text must be a string.' });
+  const text = raw.trim();
   if (!text) return res.status(400).json({ error: 'Message is empty.' });
   if (text.length > MSG_MAX) return res.status(413).json({ error: 'Messages are limited to 2000 characters.' });
 
   const me = found.auth.userId;
-  const other = found.other;
-
+  const destination = found.server ? { s: found.server._id } : { b: found.other };
+  const mentions = parseMentions(text, found.members);
+  const byId = new Map(found.members.map((u) => [u._id, u]));
   for (let attempt = 0; attempt < 5; attempt++) {
     const last = await Msg.findOne({ _id: { $type: 'number' } }).sort({ _id: -1 }).select('_id').lean();
-    const t = nowSeconds();
     try {
-      const doc = await Msg.create({ _id: (last ? last._id : 0) + 1, a: me, b: other, m: text, t });
-      return res.status(200).json({ message: { id: doc._id, mine: true, text, t } });
+      const doc = await Msg.create({
+        _id: (last ? last._id : 0) + 1,
+        a: me,
+        ...destination,
+        m: text,
+        t: nowSeconds(),
+        ...(mentions.length ? { r: mentions } : {})
+      });
+      return res.status(200).json({ message: messagePayload(doc, me, byId) });
     } catch (err) {
       if (err.code !== 11000) throw err;
     }
@@ -727,8 +972,9 @@ async function handleDelete(req, res, id) {
   const m = await Msg.findById(mid).lean();
   if (!m) return res.status(404).json({ error: 'Message not found.' });
   if (m.a !== auth.userId) return res.status(403).json({ error: 'You can only delete your own messages.' });
+  if (m.s != null && !(await serverForUser(res, m.s, auth.userId))) return;
 
-  await Msg.updateOne({ _id: mid }, { $set: { d: 1 } });
+  await Msg.updateOne({ _id: mid, a: auth.userId }, { $set: { d: 1 } });
   return res.status(200).json({ ok: true });
 }
 
@@ -800,7 +1046,7 @@ module.exports = async function handler(req, res) {
     }
 
     await connectDB();
-    const { action, email, password, otp, id, image, accept, username, status, bio, text } = body;
+    const { action, email, password, otp, id, image, accept, username, status, bio, text, kind, name, code, rotate } = body;
 
     if (action === 'register') {
       if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
@@ -861,9 +1107,15 @@ module.exports = async function handler(req, res) {
     if (action === 'username') return await handleUsername(req, res, username);
     if (action === 'bio') return await handleBio(req, res, bio);
     if (action === 'profile') return await handleProfile(req, res, id);
-    if (action === 'messages') return await handleMessages(req, res, id);
+    if (action === 'server-create') return await handleServerCreate(req, res, name);
+    if (action === 'servers') return await handleServers(req, res);
+    if (action === 'server-members') return await handleServerMembers(req, res, id);
+    if (action === 'server-invite') return await handleServerInvite(req, res, id, rotate);
+    if (action === 'invite-preview') return await handleInvite(req, res, code, false);
+    if (action === 'invite-join') return await handleInvite(req, res, code, true);
+    if (action === 'messages') return await handleMessages(req, res, id, kind);
     if (action === 'threads') return await handleThreads(req, res);
-    if (action === 'send') return await handleSend(req, res, id, text);
+    if (action === 'send') return await handleSend(req, res, id, text, kind);
     if (action === 'delete') return await handleDelete(req, res, id);
     if (action === 'ping') return await handlePing(req, res);
     if (action === 'status') return await handleStatus(req, res, status);
