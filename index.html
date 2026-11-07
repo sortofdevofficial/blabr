@@ -1,152 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/png" href="/favicon.png?v=3">
-    <link rel="stylesheet" href="/style.css">
-    <title>pratr</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0f">
+<link rel="icon" type="image/png" href="/favicon.png?v=3">
+<link rel="stylesheet" href="/style.css">
+<title>pratr</title>
 </head>
 <body>
-    <div class="card" id="auth-card">
-        <div class="brand"><img src="/logo.png" alt="pratr"></div>
-        <h2 id="title">Login</h2>
-        <form id="form">
-            <input type="email" id="email" placeholder="Email" autocomplete="email" required>
-            <input type="text" id="username" class="hidden" placeholder="Username (optional)" maxlength="20" autocomplete="off" spellcheck="false">
-            <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
-            <button type="submit" id="btn">Login</button>
-        </form>
-        <form id="otp-form" class="hidden">
-            <p id="otp-note"></p>
-            <input id="otp" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code" spellcheck="false" required>
-            <button type="submit">Verify</button>
-            <p id="resend">Resend code</p>
-        </form>
-        <p id="toggle">Need an account? Register</p>
-        <p id="msg"></p>
-    </div>
 
-    <div class="hidden" id="dash">
-        <div class="dash-sidebar">
-            <div class="sidebar-scroll">
-                <div class="msgr-list-head"><strong>Servers</strong><span class="head-actions"><button type="button" id="server-create">+ Create</button></span></div>
-                <div class="msgr-convos" id="dash-servers"></div>
-                <div class="msgr-list-head"><strong>Messages</strong></div>
-                <div class="msgr-convos" id="dash-convos"></div>
-            </div>
-            <div class="msgr-me" id="dash-me">
-                <div class="fava" id="dash-me-ava"><span id="dash-me-initial">?</span></div>
-                <div class="msgr-me-info">
-                    <strong id="dash-me-name">@</strong>
-                    <span id="dash-me-status">Online</span>
-                </div>
-                <button type="button" id="dash-me-logout" title="Log out">⏻</button>
-            </div>
+<!-- ============ AUTH ============ -->
+<main class="auth" id="auth-screen">
+  <div class="auth-glow g1"></div><div class="auth-glow g2"></div>
+  <section class="auth-card" id="auth-card">
+    <div class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" class="ic"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span><span class="logo-text">pratr</span></div>
+    <h1 id="title">Welcome back</h1>
+    <p class="sub" id="subtitle">Log in to pick up where you left off.</p>
+
+    <form id="form" novalidate>
+      <label class="field hidden" id="username-wrap"><span>Username</span>
+        <input type="text" id="username" placeholder="Pick a username (optional)" maxlength="20" autocomplete="off" spellcheck="false"></label>
+      <label class="field"><span>Email</span>
+        <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required></label>
+      <label class="field"><span>Password</span>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required></label>
+      <button type="submit" class="btn primary" id="btn">Log in</button>
+    </form>
+
+    <form id="otp-form" class="hidden" novalidate>
+      <p class="sub" id="otp-note"></p>
+      <input id="otp" class="otp-input" inputmode="numeric" maxlength="6" placeholder="······" autocomplete="one-time-code" spellcheck="false" required>
+      <button type="submit" class="btn primary">Verify &amp; continue</button>
+      <div class="auth-links"><button type="button" class="linkbtn" id="resend">Resend code</button><button type="button" class="linkbtn" id="otp-back">Back</button></div>
+    </form>
+
+    <p class="msg-err" id="msg" role="alert"></p>
+    <p class="auth-switch"><span id="toggle-text">New here?</span> <button type="button" class="linkbtn" id="toggle">Create an account</button></p>
+  </section>
+</main>
+
+<!-- ============ APP ============ -->
+<div class="app hidden" id="app">
+  <div class="nav" id="nav">
+    <nav class="rail" id="rail" aria-label="Servers">
+      <button class="rail-btn home" id="rail-home" title="Home"><svg viewBox="0 0 24 24" class="ic"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></button>
+      <div class="rail-sep"></div>
+      <div class="rail-list" id="rail-servers"></div>
+      <button class="rail-btn action" id="server-create" title="Create a server"><svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="rail-btn action" id="server-join-btn" title="Join a server"><svg viewBox="0 0 24 24" class="ic"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button>
+    </nav>
+
+    <aside class="side">
+      <header class="side-head" id="side-head">
+        <h2 id="side-title">Home</h2>
+        <button class="icon-btn hidden" id="server-menu-btn" title="Server menu" aria-label="Server menu"><svg viewBox="0 0 24 24" class="ic"><path d="m6 9 6 6 6-6"/></svg></button>
+      </header>
+      <div class="side-body">
+        <div id="home-list">
+          <button class="nav-item" id="nav-friends"><svg viewBox="0 0 24 24" class="ic"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg><span>Friends</span></button>
+          <div class="sec-title"><span>Direct messages</span></div>
+          <div id="dm-list"></div>
         </div>
-        <div class="dash-main">
-            <div class="dash-home" id="dash-home">
-                <div class="brand small"><img src="/logo.png" alt="pratr"></div>
-                <div class="dash-head">
-                    <div class="avatar">
-                        <span id="avatar-initial">?</span>
-                        <span class="pdot on"></span>
-                    </div>
-                    <div class="dash-me">
-                        <strong id="uname">@</strong>
-                        <p id="who"></p>
-                        <p id="bio" class="bio-line empty">No bio yet</p>
-                    </div>
-                </div>
-                <h3>Active logins</h3>
-                <div id="sessions"></div>
-                <div class="hrow">
-                    <h3>Friends</h3>
-                </div>
-                <div id="f-pane-all"></div>
-                <button type="button" id="logout-btn">Logout</button>
-            </div>
-
-            <div class="msgr-thread hidden" id="dash-thread">
-                <div class="msgr-head">
-                    <button type="button" class="msgr-back" id="dash-back" aria-label="Back">←</button>
-                    <div class="fava" id="chat-ava"><span id="chat-initial">?</span></div>
-                    <div class="msgr-title">
-                        <h2 id="chat-name">@</h2>
-                        <p class="chat-status"><i class="pdot-mini on" id="chat-dot"></i><span id="chat-status">Online</span></p>
-                    </div>
-                    <div class="thread-actions hidden" id="server-actions">
-                        <button type="button" id="server-members-btn" title="Server Members">👥 Members</button>
-                        <button type="button" id="server-invite" class="hidden" title="Invite Friends">🔗 Invite</button>
-                    </div>
-                </div>
-                <div class="thread-container">
-                    <div class="channels-pane hidden" id="channels-pane">
-                        <div class="channels-header">
-                            <span id="channels-server-name">CHANNELS</span>
-                            <button type="button" class="link" id="add-channel-btn" title="Create Text Channel">+</button>
-                        </div>
-                        <div class="channels-list" id="channels-list"></div>
-                    </div>
-                    <div class="thread-chat-pane">
-                        <div class="chat-log" id="chat-log"></div>
-                        <div class="msgr-composer">
-                            <form id="chat-form">
-                                <input id="chat-input" maxlength="2000" placeholder="Message…" autocomplete="off" required>
-                                <button type="submit" id="chat-send">➤</button>
-                            </form>
-                        </div>
-                    </div>
-                    <div class="members-sidebar hidden" id="members-sidebar">
-                        <div class="members-sidebar-header">
-                            <span>Members — <span id="members-count">0</span></span>
-                        </div>
-                        <div class="members-sidebar-list" id="members-sidebar-list"></div>
-                    </div>
-                </div>
-            </div>
+        <div id="server-list" class="hidden">
+          <div id="channel-list"></div>
         </div>
-    </div>
+      </div>
+      <footer class="user-panel">
+        <div class="ava sm" id="me-ava"><span id="me-initial">?</span><i class="dot on"></i></div>
+        <div class="me-info"><strong id="me-name">…</strong><span id="me-email"></span></div>
+        <button class="icon-btn" id="logout-btn" title="Log out" aria-label="Log out"><svg viewBox="0 0 24 24" class="ic"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
+      </footer>
+    </aside>
+  </div>
+  <div class="scrim" id="scrim"></div>
 
-    <!-- Modals -->
-    <div class="modal hidden" id="channel-modal" role="dialog" aria-modal="true">
-        <div class="modal-card">
-            <button type="button" class="modal-close" id="channel-modal-close" aria-label="Close">×</button>
-            <h2>Create Text Channel</h2>
-            <form id="channel-create-form">
-                <label for="new-channel-name">Channel Name</label>
-                <input id="new-channel-name" placeholder="general" maxlength="40" required autocomplete="off">
-                <label for="new-channel-cat" style="margin-top:8px; display:block;">Category</label>
-                <input id="new-channel-cat" placeholder="TEXT CHANNELS" maxlength="40" autocomplete="off" value="TEXT CHANNELS">
-                <p id="channel-modal-msg"></p>
-                <div class="modal-actions" style="margin-top:12px;">
-                    <button type="button" class="ghost" id="channel-modal-cancel">Cancel</button>
-                    <button type="submit">Create</button>
-                </div>
+  <main class="main">
+    <!-- Friends / home -->
+    <section class="view" id="view-home">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" data-menu aria-label="Menu"><svg viewBox="0 0 24 24" class="ic"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+        <svg viewBox="0 0 24 24" class="ic muted"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <h1>Friends</h1>
+      </header>
+      <div class="scroll">
+        <div class="home-wrap">
+          <div class="panel">
+            <h3>Add a friend</h3>
+            <p class="hint">Enter their username or email. Friends can message you directly.</p>
+            <form id="friend-add-form" class="inline-form">
+              <input id="friend-add-input" placeholder="Username or email" autocomplete="off" required>
+              <button type="submit" class="btn primary">Add friend</button>
             </form>
+          </div>
+          <div class="panel">
+            <h3>All friends — <span id="friend-count">0</span></h3>
+            <div id="friend-grid"></div>
+          </div>
         </div>
-    </div>
+      </div>
+    </section>
 
-    <div class="modal hidden" id="server-dialog" role="dialog" aria-modal="true">
-        <div class="modal-card">
-            <button type="button" class="modal-close" id="server-dialog-close" aria-label="Close">×</button>
-            <h2 id="server-dialog-title">Server Settings</h2>
-            <form id="server-create-form" class="hidden">
-                <label for="server-name">Server name</label>
-                <input id="server-name" maxlength="60" placeholder="My Server" autocomplete="off" required>
-                <button type="submit" style="margin-top:10px;">Create server</button>
+    <!-- Chat -->
+    <section class="view hidden" id="view-chat">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" data-menu aria-label="Menu"><svg viewBox="0 0 24 24" class="ic"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+        <span class="topbar-ic" id="chat-icon"></span>
+        <h1 id="chat-name">#</h1>
+        <span class="topbar-sub" id="chat-sub"></span>
+        <div class="spacer"></div>
+        <button class="icon-btn hidden" id="invite-btn" title="Invite people" aria-label="Invite"><svg viewBox="0 0 24 24" class="ic"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></button>
+        <button class="icon-btn hidden" id="members-btn" title="Members" aria-label="Members"><svg viewBox="0 0 24 24" class="ic"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></button>
+      </header>
+      <div class="chat-body members-on" id="chat-body">
+        <div class="chat-col">
+          <div class="messages" id="messages"></div>
+          <div class="empty hidden" id="chat-empty"></div>
+          <div class="composer-wrap" id="composer-wrap">
+            <form id="chat-form" class="composer">
+              <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Message" autocomplete="off"></textarea>
+              <button type="submit" id="chat-send" class="send" aria-label="Send"><svg viewBox="0 0 24 24" class="ic"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
             </form>
-            <div id="server-invite-panel" class="hidden">
-                <p class="fhint">Anyone with this invite link can join your server.</p>
-                <input id="server-invite-link" readonly>
-                <div class="modal-actions" style="margin-top:10px;">
-                    <button type="button" id="server-invite-copy">Copy link</button>
-                </div>
-            </div>
+          </div>
         </div>
-    </div>
+        <aside class="members" id="members">
+          <h4>Members — <span id="members-count">0</span></h4>
+          <div id="members-list"></div>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
 
-    <div class="toast-stack" id="toast-stack"></div>
-    <script src="/app.js"></script>
+<!-- Server dropdown -->
+<div class="menu hidden" id="server-menu">
+  <button data-act="invite"><svg viewBox="0 0 24 24" class="ic"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Invite people</button>
+  <button data-act="channel" id="menu-channel"><svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>Create channel</button>
+  <button data-act="leave" class="danger" id="menu-leave"><svg viewBox="0 0 24 24" class="ic"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Leave server</button>
+</div>
+
+<!-- Modals -->
+<div class="modal hidden" id="modal-server" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <button class="modal-x" data-close aria-label="Close">×</button>
+    <h2>Create your server</h2><p class="hint">A server is where you and your friends hang out. A #general channel is created for you.</p>
+    <form id="server-create-form"><label class="field"><span>Server name</span><input id="server-name" maxlength="60" placeholder="My awesome server" autocomplete="off" required></label>
+    <div class="modal-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary" type="submit">Create</button></div></form>
+  </div>
+</div>
+
+<div class="modal hidden" id="modal-join" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <button class="modal-x" data-close aria-label="Close">×</button>
+    <h2>Join a server</h2><p class="hint">Paste an invite link or code.</p>
+    <form id="server-join-form"><label class="field"><span>Invite</span><input id="join-code" placeholder="https://…/#invite=…" autocomplete="off" required></label>
+    <div class="modal-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary" type="submit">Join</button></div></form>
+  </div>
+</div>
+
+<div class="modal hidden" id="modal-channel" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <button class="modal-x" data-close aria-label="Close">×</button>
+    <h2>Create text channel</h2>
+    <form id="channel-create-form">
+      <label class="field"><span>Channel name</span><input id="new-channel-name" placeholder="new-channel" maxlength="40" autocomplete="off" required></label>
+      <label class="field"><span>Category</span><input id="new-channel-cat" list="cat-options" maxlength="40" autocomplete="off" value="TEXT CHANNELS"></label>
+      <datalist id="cat-options"></datalist>
+      <p class="msg-err" id="channel-modal-msg"></p>
+      <div class="modal-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary" type="submit">Create</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal hidden" id="modal-invite" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <button class="modal-x" data-close aria-label="Close">×</button>
+    <h2>Invite people</h2><p class="hint">Anyone with this link can join your server.</p>
+    <div class="inline-form"><input id="invite-link" readonly><button class="btn primary" id="invite-copy" type="button">Copy</button></div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+<script src="/app.js"></script>
 </body>
 </html>

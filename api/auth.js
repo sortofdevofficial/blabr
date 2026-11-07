@@ -100,6 +100,8 @@ async function nextId(Model) {
   return (last ? last._id : 0) + 1;
 }
 
+const areFriends = async (x, y) => !!(await Friend.exists({ $or: [{ a: x, b: y }, { a: y, b: x }], s: 'a' }));
+
 const isMember = async (serverId, userId) => !!(await Server.exists({ _id: Number(serverId), m: userId }));
 
 module.exports = async function handler(req, res) {
@@ -215,41 +217,67 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === 'server-invite') {
-      const server = await Server.findOne({ _id: Number(id), o: auth.userId }).lean();
-      if (!server) return res.status(403).json({ error: 'Only owner can invite.' });
+      const server = await Server.findOne({ _id: Number(id), m: auth.userId }).lean();
+      if (!server) return res.status(403).json({ error: 'You are not a member of this server.' });
       return res.status(200).json({ code: server.i });
+    }
+
+    if (action === 'members') {
+      const server = await Server.findOne({ _id: Number(id), m: auth.userId }).lean();
+      if (!server) return res.status(403).json({ error: 'Not a member.' });
+      const users = await User.find({ _id: { $in: server.m } }).select('n').lean();
+      return res.status(200).json({ owner: server.o, members: users.map(u => ({ id: u._id, username: u.n })) });
+    }
+
+    if (action === 'channel-delete') {
+      const ch = await Channel.findById(Number(channelId)).lean();
+      if (!ch || !(await Server.exists({ _id: ch.s, o: auth.userId }))) return res.status(403).json({ error: 'Only the owner can delete channels.' });
+      await Channel.deleteOne({ _id: ch._id });
+      await Msg.deleteMany({ s: ch.s, ch: ch._id });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'server-leave') {
+      const server = await Server.findOne({ _id: Number(id), m: auth.userId }).lean();
+      if (!server) return res.status(404).json({ error: 'Not a member.' });
+      if (server.o === auth.userId) return res.status(400).json({ error: 'Owners cannot leave their own server.' });
+      await Server.updateOne({ _id: server._id }, { $pull: { m: auth.userId } });
+      return res.status(200).json({ ok: true });
     }
 
     if (action === 'messages') {
       const isServer = kind === 'server';
-      if (isServer && !(await isMember(id, auth.userId))) return res.status(403).json({ error: 'Not a member.' });
-      const match = isServer ? { s: Number(id), ch: Number(channelId) } : { $or: [{ a: auth.userId, b: Number(id) }, { a: Number(id), b: auth.userId }] };
-      const msgs = await Msg.find({ ...match, d: { $ne: 1 } }).sort({ _id: -1 }).limit(50).lean();
-      
-      let server = null;
-      let members = [];
+      let match;
       if (isServer) {
-        server = await Server.findById(Number(id)).lean();
-        if (server) members = await User.find({ _id: { $in: server.m } }).select('n av').lean();
+        if (!(await isMember(id, auth.userId))) return res.status(403).json({ error: 'Not a member.' });
+        if (!(await Channel.exists({ _id: Number(channelId), s: Number(id) }))) return res.status(404).json({ error: 'Channel not found.' });
+        match = { s: Number(id), ch: Number(channelId) };
+      } else {
+        if (!(await areFriends(auth.userId, Number(id)))) return res.status(403).json({ error: 'You can only message friends.' });
+        match = { $or: [{ a: auth.userId, b: Number(id) }, { a: Number(id), b: auth.userId }] };
       }
+      const msgs = await Msg.find({ ...match, d: { $ne: 1 } }).sort({ _id: -1 }).limit(100).lean();
+      const authors = await User.find({ _id: { $in: [...new Set(msgs.map(m => m.a))] } }).select('n').lean();
+      const names = Object.fromEntries(authors.map(u => [u._id, u.n]));
       return res.status(200).json({
-        ...(server ? { server: { id: server._id, name: server.n, count: server.m.length }, members: members.map(m => ({ id: m._id, username: m.n })) } : {}),
-        messages: msgs.reverse().map(m => ({ id: m._id, mine: m.a === auth.userId, text: m.m, t: m.t }))
+        messages: msgs.reverse().map(m => ({ id: m._id, mine: m.a === auth.userId, text: m.m, t: m.t, author: { id: m.a, username: names[m.a] || 'Unknown' } }))
       });
     }
 
     if (action === 'send') {
       const clean = String(text || '').trim().slice(0, 2000);
       if (!clean) return res.status(400).json({ error: 'Empty message.' });
-      if (kind === 'server' && !(await isMember(id, auth.userId))) return res.status(403).json({ error: 'Not a member.' });
-      const msgId = await nextId(Msg);
-      const msg = await Msg.create({
-        _id: msgId,
-        a: auth.userId,
-        ...(kind === 'server' ? { s: Number(id), ch: Number(channelId) } : { b: Number(id) }),
-        m: clean
-      });
-      return res.status(200).json({ message: { id: msg._id, mine: true, text: msg.m } });
+      let target;
+      if (kind === 'server') {
+        if (!(await isMember(id, auth.userId))) return res.status(403).json({ error: 'Not a member.' });
+        if (!(await Channel.exists({ _id: Number(channelId), s: Number(id) }))) return res.status(400).json({ error: 'This server has no such text channel.' });
+        target = { s: Number(id), ch: Number(channelId) };
+      } else {
+        if (!(await areFriends(auth.userId, Number(id)))) return res.status(403).json({ error: 'You can only message friends.' });
+        target = { b: Number(id) };
+      }
+      const msg = await Msg.create({ _id: await nextId(Msg), a: auth.userId, ...target, m: clean });
+      return res.status(200).json({ message: { id: msg._id, mine: true, text: msg.m, t: msg.t } });
     }
 
     return res.status(400).json({ error: 'Invalid action.' });

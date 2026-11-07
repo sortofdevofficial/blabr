@@ -1,370 +1,581 @@
+'use strict';
 const $ = (id) => document.getElementById(id);
-let isLogin = true;
-let token = localStorage.getItem('token') || '';
-let chat = null;
-let currentChannels = [];
-let currentChannelId = null;
-let syncTimer = null;
+const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const svg = (d) => `<svg class="ic" viewBox="0 0 24 24"><path d="${d}"/></svg>`;
+const ICON = {
+    hash: svg('M5 9h14M5 15h14M10 3 8 21M16 3l-2 18'),
+    trash: svg('M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6'),
+    plus: svg('M12 5v14M5 12h14'),
+    chat: svg('M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z')
+};
+
+const S = {
+    token: localStorage.getItem('token') || '',
+    me: null, servers: [], friends: [], view: 'home',
+    server: null, channels: [], channelId: null, dm: null, members: [],
+    last: {}, chLoaded: false, sig: '', sending: false, membersOn: window.innerWidth > 860,
+    login: true, t1: null, t2: null
+};
+
+/* ---------- helpers ---------- */
+const color = (s) => { let x = 0; for (const c of String(s)) x = (x * 31 + c.charCodeAt(0)) % 360; return `hsl(${x} 55% 48%)`; };
+function avatar(name, cls = '') { const a = h('div', 'ava ' + cls, (name || '?')[0].toUpperCase()); a.style.background = color(name); return a; }
+const isOwner = () => !!(S.me && S.server && S.server.owner === S.me.id);
+const curChannel = () => S.channels.find(c => c.id === S.channelId) || null;
+const fmtTime = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function fmtDay(t) {
+    const d = new Date(t * 1000), n = new Date();
+    if (d.toDateString() === n.toDateString()) return 'Today';
+    n.setDate(n.getDate() - 1);
+    if (d.toDateString() === n.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+}
+function toast(text, err = false) {
+    const el = h('div', 'toast' + (err ? ' err' : ''), text);
+    $('toast-stack').append(el);
+    setTimeout(() => el.remove(), 3500);
+}
+function chatKey() {
+    if (S.view === 'server' && S.server) return `s${S.server.id}c${S.channelId}`;
+    if (S.view === 'dm' && S.dm) return `d${S.dm.id}`;
+    return '';
+}
 
 async function post(payload) {
     const headers = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (S.token) headers.Authorization = `Bearer ${S.token}`;
     try {
         const res = await fetch('/api/auth', { method: 'POST', headers, body: JSON.stringify(payload) });
         const data = await res.json().catch(() => ({}));
-        if (res.status === 401 && token && !['login', 'register', 'verify'].includes(payload.action)) { clearSession(); }
+        if (res.status === 401 && S.token && !['login', 'register', 'verify'].includes(payload.action)) clearSession();
         return { res, data };
     } catch {
-        return { res: { ok: false, status: 500 }, data: { error: 'Network error.' } };
+        return { res: { ok: false, status: 0 }, data: { error: 'Network error.' } };
     }
 }
 
-function clearSession() {
-    clearInterval(syncTimer);
-    token = '';
-    chat = null;
-    localStorage.removeItem('token');
-    localStorage.removeItem('email');
-    document.body.classList.remove('has-dash');
-    $('dash').classList.add('hidden');
-    $('auth-card').classList.remove('hidden');
-}
-
-async function logout() {
-    await post({ action: 'logout' });
-    clearSession();
-}
-
-function notify(text) {
-    const stack = $('toast-stack');
-    if (!stack) return;
-    const el = document.createElement('div');
-    el.className = 'toast';
-    el.textContent = text;
-    stack.append(el);
-    setTimeout(() => el.remove(), 3500);
-}
-
-function finishLogin(data) {
-    token = data.token;
-    localStorage.setItem('token', token);
-    localStorage.setItem('email', data.email);
-    $('form').classList.remove('hidden');
-    $('otp-form').classList.add('hidden');
+/* ---------- auth ---------- */
+function setAuthMode(login) {
+    S.login = login;
+    $('title').textContent = login ? 'Welcome back' : 'Create your account';
+    $('subtitle').textContent = login ? 'Log in to pick up where you left off.' : 'Join pratr in a few seconds.';
+    $('btn').textContent = login ? 'Log in' : 'Create account';
+    $('toggle-text').textContent = login ? 'New here?' : 'Already have an account?';
+    $('toggle').textContent = login ? 'Create an account' : 'Log in';
+    $('username-wrap').classList.toggle('hidden', login);
+    $('password').autocomplete = login ? 'current-password' : 'new-password';
     $('msg').textContent = '';
-    showDash();
 }
-
-$('toggle').onclick = () => {
-    isLogin = !isLogin;
-    $('title').textContent = isLogin ? 'Login' : 'Register';
-    $('btn').textContent = isLogin ? 'Login' : 'Register';
-    $('toggle').textContent = isLogin ? 'Need an account? Register' : 'Have an account? Login';
-    $('username').classList.toggle('hidden', isLogin);
-    $('msg').textContent = '';
-};
+$('toggle').onclick = () => setAuthMode(!S.login);
 
 $('form').onsubmit = async (e) => {
     e.preventDefault();
+    const email = $('email').value.trim(), password = $('password').value;
+    if (!email || !password) { $('msg').textContent = 'Email and password required.'; return; }
     $('msg').textContent = '';
-    const email = $('email').value;
-    const password = $('password').value;
-    const username = isLogin ? '' : $('username').value.trim();
-    const out = await post({ action: isLogin ? 'login' : 'register', email, password, username });
+    $('btn').disabled = true;
+    const out = await post({ action: S.login ? 'login' : 'register', email, password, username: S.login ? '' : $('username').value.trim() });
+    $('btn').disabled = false;
     if (!out.res.ok) { $('msg').textContent = out.data.error || 'Request failed.'; return; }
-    if (isLogin) return finishLogin(out.data);
+    if (S.login) return finishLogin(out.data);
     $('form').classList.add('hidden');
     $('otp-form').classList.remove('hidden');
-    $('otp-note').textContent = `Code sent to ${email}`;
+    $('otp-note').textContent = `We sent a 6-digit code to ${email}.`;
+    $('otp').focus();
 };
-
 $('otp-form').onsubmit = async (e) => {
     e.preventDefault();
-    const out = await post({ action: 'verify', email: $('email').value, otp: $('otp').value.trim() });
-    if (out.res.ok) finishLogin(out.data);
-    else $('msg').textContent = out.data.error || 'Invalid code.';
+    const out = await post({ action: 'verify', email: $('email').value.trim(), otp: $('otp').value.trim() });
+    if (out.res.ok) finishLogin(out.data); else $('msg').textContent = out.data.error || 'Invalid code.';
 };
-
 $('resend').onclick = async () => {
-    const out = await post({ action: 'register', email: $('email').value, password: $('password').value, username: $('username').value.trim() });
-    if (out.res.ok) notify('New code sent.');
-    else $('msg').textContent = out.data.error || 'Could not resend.';
+    const out = await post({ action: 'register', email: $('email').value.trim(), password: $('password').value, username: $('username').value.trim() });
+    if (out.res.ok) toast('New code sent.'); else $('msg').textContent = out.data.error || 'Could not resend.';
 };
+$('otp-back').onclick = () => { $('otp-form').classList.add('hidden'); $('form').classList.remove('hidden'); $('msg').textContent = ''; };
 
-function showDash() {
-    document.body.classList.add('has-dash');
-    $('auth-card').classList.add('hidden');
-    $('dash').classList.remove('hidden');
-    const email = localStorage.getItem('email') || 'user';
-    $('dash-me-name').textContent = '@' + email;
-    $('dash-me-initial').textContent = email[0].toUpperCase();
-    $('avatar-initial').textContent = email[0].toUpperCase();
-    $('uname').textContent = '@' + email;
-    post({ action: 'me' }).then(({ res, data }) => {
-        if (!res.ok) return;
-        $('dash-me-name').textContent = '@' + data.username;
-        $('uname').textContent = '@' + data.username;
-        $('who').textContent = data.email;
-        $('dash-me-initial').textContent = (data.username || '?')[0].toUpperCase();
-        $('avatar-initial').textContent = (data.username || '?')[0].toUpperCase();
-    });
-    renderFriendForm();
-    loadServers();
-    loadFriends();
-    startSync();
+function finishLogin(data) {
+    S.token = data.token;
+    localStorage.setItem('token', S.token);
+    localStorage.setItem('email', data.email);
+    $('form').classList.remove('hidden');
+    $('otp-form').classList.add('hidden');
+    $('password').value = ''; $('otp').value = '';
+    boot();
+}
+
+function clearSession() {
+    clearInterval(S.t1); clearInterval(S.t2);
+    S.token = ''; S.me = null; S.servers = []; S.friends = []; S.view = 'home';
+    S.server = null; S.dm = null; S.channels = []; S.channelId = null; S.sig = '';
+    localStorage.removeItem('token'); localStorage.removeItem('email');
+    closeModals(); closeNav(); $('server-menu').classList.add('hidden');
+    $('app').classList.add('hidden');
+    $('auth-screen').classList.remove('hidden');
+}
+$('logout-btn').onclick = async () => { await post({ action: 'logout' }); clearSession(); };
+
+/* ---------- boot ---------- */
+function setMe(u) {
+    const name = u.username || 'user';
+    $('me-name').textContent = name;
+    $('me-email').textContent = u.email || '';
+    $('me-initial').textContent = name[0].toUpperCase();
+    $('me-ava').style.background = color(name);
+}
+
+async function boot() {
+    $('auth-screen').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    const email = localStorage.getItem('email') || '';
+    setMe({ username: email.split('@')[0], email });
+    renderAll();
+    const me = await post({ action: 'me' });
+    if (!me.res.ok) return;
+    S.me = me.data;
+    setMe(me.data);
+    await Promise.all([loadServers(), loadFriends()]);
+    renderAll();
+    startTimers();
     handleInvite();
 }
 
-function renderFriendForm() {
-    const pane = $('f-pane-all');
-    if (!pane || pane.dataset.ready) return;
-    pane.dataset.ready = '1';
-    pane.innerHTML = '<form id="friend-add-form"><input id="friend-add-input" placeholder="Add friend by username or email" autocomplete="off" required><button type="submit">Add</button></form>';
-    $('friend-add-form').onsubmit = async (e) => {
-        e.preventDefault();
-        const out = await post({ action: 'friend-add', username: $('friend-add-input').value });
-        if (out.res.ok) { $('friend-add-input').value = ''; notify('Friend added!'); loadFriends(); }
-        else notify(out.data.error || 'Could not add friend.');
-    };
-}
-
-async function handleInvite() {
-    const m = location.hash.match(/^#invite=([a-f0-9]+)$/);
-    if (!m) return;
-    history.replaceState(null, '', location.pathname);
-    const out = await post({ action: 'server-join', code: m[1] });
-    if (out.res.ok) { notify('Joined ' + out.data.server.name); await loadServers(); openServer(out.data.server); }
-    else notify(out.data.error || 'Invalid invite.');
-}
-
-function startSync() {
-    clearInterval(syncTimer);
-    syncTimer = setInterval(() => {
-        loadServers();
-        loadFriends();
-        if (chat) loadChat(false);
+function startTimers() {
+    clearInterval(S.t1); clearInterval(S.t2);
+    S.t1 = setInterval(() => { if (!document.hidden && S.view !== 'home') loadMessages(false); }, 3000);
+    S.t2 = setInterval(async () => {
+        if (document.hidden) return;
+        await loadServers(); await loadFriends();
+        if (S.view === 'server' && S.server) {
+            const before = S.channelId, n = S.channels.length;
+            await loadChannels();
+            loadMembers();
+            if (before !== S.channelId || n !== S.channels.length) { renderAll(); loadMessages(true); } else renderSide();
+        }
     }, 15000);
 }
 
-async function loadFriends() {
-    const out = await post({ action: 'friends' });
-    if (!out.res.ok) return;
-    const box = $('dash-convos');
-    box.textContent = '';
-    (out.data.friends || []).forEach(u => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'conv' + (chat && chat.kind === 'dm' && chat.id === u.id ? ' on' : '');
-        btn.textContent = '@' + (u.username || u.email);
-        btn.onclick = () => { activateChat('dm', u); loadFriends(); };
-        box.append(btn);
-    });
-}
-
+/* ---------- data ---------- */
 async function loadServers() {
     const out = await post({ action: 'servers' });
     if (!out.res.ok) return;
-    const box = $('dash-servers');
-    box.textContent = '';
-    (out.data.servers || []).forEach(s => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'conv' + (chat && chat.kind === 'server' && chat.id === s.id ? ' on' : '');
-        btn.textContent = s.name;
-        btn.onclick = () => openServer(s);
-        box.append(btn);
-    });
+    S.servers = out.data.servers || [];
+    if (S.server) {
+        const fresh = S.servers.find(s => s.id === S.server.id);
+        if (fresh) S.server = fresh; else if (S.view === 'server') { goHome(); return; }
+    }
+    renderRail();
 }
-
-async function openServer(s) {
-    await loadChannels(s.id, true);
-    activateChat('server', s);
-    loadServers();
-}
-
-async function loadChannels(serverId, resetSelection = false) {
-    const out = await post({ action: 'channels', id: serverId });
+async function loadFriends() {
+    const out = await post({ action: 'friends' });
     if (!out.res.ok) return;
-    currentChannels = out.data.channels || [];
-    if (resetSelection || !currentChannels.some(c => c.id === currentChannelId)) {
-        currentChannelId = currentChannels.length ? currentChannels[0].id : null;
-    }
-    renderChannelsList();
+    S.friends = out.data.friends || [];
+    renderSide();
+    if (S.view === 'home') renderFriends();
 }
-
-function renderChannelsList() {
-    const list = $('channels-list');
-    list.textContent = '';
-    const cats = {};
-    currentChannels.forEach(c => {
-        const cat = c.category || 'TEXT CHANNELS';
-        (cats[cat] = cats[cat] || []).push(c);
-    });
-    for (const [catName, chans] of Object.entries(cats)) {
-        const catDiv = document.createElement('div');
-        catDiv.className = 'channel-cat';
-        catDiv.textContent = catName;
-        list.append(catDiv);
-        chans.forEach(c => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'channel-item' + (currentChannelId === c.id ? ' active' : '');
-            btn.textContent = '#' + c.name;
-            btn.onclick = () => {
-                currentChannelId = c.id;
-                renderChannelsList();
-                loadChat(true);
-            };
-            list.append(btn);
-        });
+async function loadChannels(reset = false) {
+    if (!S.server) return;
+    const out = await post({ action: 'channels', id: S.server.id });
+    if (!out.res.ok) return;
+    S.channels = out.data.channels || [];
+    S.chLoaded = true;
+    if (reset || !S.channels.some(c => c.id === S.channelId)) {
+        const rem = S.channels.find(c => c.id === S.last[S.server.id]);
+        const pick = rem || S.channels[0];
+        S.channelId = pick ? pick.id : null;
     }
 }
-
-$('add-channel-btn').onclick = () => { $('channel-modal-msg').textContent = ''; $('channel-modal').classList.remove('hidden'); };
-$('channel-modal-close').onclick = () => $('channel-modal').classList.add('hidden');
-$('channel-modal-cancel').onclick = () => $('channel-modal').classList.add('hidden');
-$('channel-create-form').onsubmit = async (e) => {
-    e.preventDefault();
-    if (!chat || chat.kind !== 'server') return;
-    const name = $('new-channel-name').value.trim();
-    const category = $('new-channel-cat').value.trim() || 'TEXT CHANNELS';
-    const out = await post({ action: 'channel-create', id: chat.id, channelName: name, category });
-    if (out.res.ok) {
-        $('channel-modal').classList.add('hidden');
-        $('new-channel-name').value = '';
-        await loadChannels(chat.id);
-        currentChannelId = out.data.channel.id;
-        renderChannelsList();
-        loadChat(true);
-        notify('Channel created.');
-    } else {
-        $('channel-modal-msg').textContent = out.data.error || 'Could not create channel.';
-    }
-};
-
-function activateChat(kind, entry) {
-    chat = { kind, id: entry.id, user: kind === 'dm' ? entry : null, server: kind === 'server' ? entry : null };
-    const isServer = kind === 'server';
-    const label = isServer ? entry.name : '@' + (entry.username || entry.email);
-    $('chat-name').textContent = label;
-    $('chat-initial').textContent = (isServer ? entry.name[0] : label[1] || '?').toUpperCase();
-    $('chat-status').textContent = isServer ? `${entry.count || 1} members` : 'Online';
-    $('channels-server-name').textContent = isServer ? entry.name.toUpperCase() : 'CHANNELS';
-    $('channels-pane').classList.toggle('hidden', !isServer);
-    $('members-sidebar').classList.toggle('hidden', !isServer);
-    $('members-sidebar').classList.remove('show');
-    $('server-actions').classList.toggle('hidden', !isServer);
-    $('server-invite').classList.toggle('hidden', !isServer);
-    $('dash-home').classList.add('hidden');
-    $('dash-thread').classList.remove('hidden');
-    $('chat-log').textContent = '';
-    loadChat(true);
+async function loadMembers() {
+    if (!S.server) return;
+    const sid = S.server.id;
+    const out = await post({ action: 'members', id: sid });
+    if (!out.res.ok || !S.server || S.server.id !== sid) return;
+    S.members = out.data.members || [];
+    S.server.owner = out.data.owner;
+    renderMembers();
+}
+async function loadMessages(force = false) {
+    const key = chatKey();
+    if (!key) return;
+    const isServer = S.view === 'server';
+    if (isServer && S.channelId == null) return;
+    const out = await post({ action: 'messages', kind: isServer ? 'server' : 'dm', id: isServer ? S.server.id : S.dm.id, ...(isServer ? { channelId: S.channelId } : {}) });
+    if (chatKey() !== key) return; // user navigated away
+    if (out.res.status === 404 && isServer) { await loadChannels(); renderAll(); return; }
+    if (!out.res.ok) return;
+    renderMessages(out.data.messages || [], force);
 }
 
-$('dash-back').onclick = () => {
-    chat = null;
-    $('dash-home').classList.remove('hidden');
-    $('dash-thread').classList.add('hidden');
-    loadServers();
-    loadFriends();
-};
+/* ---------- navigation ---------- */
+function closeNav() { document.body.classList.remove('nav-open'); }
+document.querySelectorAll('[data-menu]').forEach(b => b.onclick = () => document.body.classList.toggle('nav-open'));
+$('scrim').onclick = closeNav;
+$('rail-home').onclick = () => { goHome(); closeNav(); };
+$('nav-friends').onclick = () => { goHome(); closeNav(); };
 
-$('server-members-btn').onclick = () => {
-    const sb = $('members-sidebar');
-    sb.classList.remove('hidden');
-    sb.classList.toggle('show');
-};
+function goHome() {
+    S.view = 'home'; S.server = null; S.dm = null; S.channels = []; S.channelId = null; S.members = []; S.sig = '';
+    renderAll();
+}
+async function openServer(id) {
+    const s = S.servers.find(x => x.id === id);
+    if (!s) return;
+    S.view = 'server'; S.server = s; S.dm = null; S.chLoaded = false; S.channels = []; S.channelId = null; S.members = []; S.sig = '';
+    $('messages').textContent = '';
+    renderAll();
+    await loadChannels(true);
+    renderAll();
+    loadMembers();
+    loadMessages(true);
+    closeNav();
+}
+function openDM(user) {
+    S.view = 'dm'; S.dm = user; S.server = null; S.channels = []; S.channelId = null; S.sig = '';
+    $('messages').textContent = '';
+    renderAll();
+    loadMessages(true);
+    closeNav();
+    $('chat-input').focus();
+}
+function selectChannel(id) {
+    S.channelId = id; S.last[S.server.id] = id; S.sig = '';
+    $('messages').textContent = '';
+    renderSide(); renderMain();
+    loadMessages(true);
+    closeNav();
+}
 
-$('chat-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const text = $('chat-input').value.trim();
-    if (!text || !chat) return;
-    if (chat.kind === 'server' && currentChannelId == null) return notify('No channel selected.');
-    const out = await post({
-        action: 'send', kind: chat.kind, id: chat.id, text,
-        ...(chat.kind === 'server' ? { channelId: currentChannelId } : {})
-    });
-    if (out.res.ok) { $('chat-input').value = ''; loadChat(true); }
-    else notify(out.data.error || 'Message failed.');
-};
+/* ---------- rendering ---------- */
+function renderAll() { renderRail(); renderSide(); renderMain(); renderMembers(); }
 
-async function loadChat(forceScroll = false) {
-    if (!chat) return;
-    const snapshot = chat;
-    const channel = currentChannelId;
-    const out = await post({
-        action: 'messages', kind: chat.kind, id: chat.id,
-        ...(chat.kind === 'server' ? { channelId: channel } : {})
-    });
-    if (!out.res.ok || chat !== snapshot || channel !== currentChannelId) return; // stale response
-
-    const box = $('chat-log');
-    const nearBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 80;
+function renderRail() {
+    $('rail-home').classList.toggle('active', S.view !== 'server');
+    const box = $('rail-servers');
     box.textContent = '';
-    (out.data.messages || []).forEach(m => {
-        const row = document.createElement('div');
-        row.className = 'mrow ' + (m.mine ? 'mine' : 'theirs');
-        row.textContent = m.text;
-        box.append(row);
+    S.servers.forEach(s => {
+        const b = h('button', 'rail-btn' + (S.server && S.server.id === s.id ? ' active' : ''), s.name[0].toUpperCase());
+        b.title = s.name;
+        b.onclick = () => openServer(s.id);
+        box.append(b);
     });
-
-    if (chat.kind === 'server' && out.data.members) {
-        const memBox = $('members-sidebar-list');
-        memBox.textContent = '';
-        $('members-count').textContent = out.data.members.length;
-        out.data.members.forEach(m => {
-            const card = document.createElement('div');
-            card.className = 'mem-card';
-            card.textContent = '@' + (m.username || 'Member');
-            memBox.append(card);
-        });
-        $('chat-status').textContent = `${out.data.members.length} members`;
-    }
-
-    if (forceScroll || nearBottom) box.scrollTop = box.scrollHeight;
 }
 
-$('server-create').onclick = () => {
-    $('server-dialog-title').textContent = 'Create Server';
-    $('server-invite-panel').classList.add('hidden');
-    $('server-create-form').classList.remove('hidden');
-    $('server-dialog').classList.remove('hidden');
+function renderSide() {
+    const server = S.view === 'server' && S.server;
+    $('side-title').textContent = server ? S.server.name : 'Home';
+    $('server-menu-btn').classList.toggle('hidden', !server);
+    $('home-list').classList.toggle('hidden', !!server);
+    $('server-list').classList.toggle('hidden', !server);
+    $('nav-friends').classList.toggle('active', S.view === 'home');
+
+    const dms = $('dm-list');
+    dms.textContent = '';
+    if (!S.friends.length) dms.append(h('div', 'side-empty', 'Add a friend to start chatting.'));
+    S.friends.forEach(u => {
+        const b = h('button', 'dm-item' + (S.view === 'dm' && S.dm && S.dm.id === u.id ? ' active' : ''));
+        b.append(avatar(u.username || u.email, 'sm'), h('span', '', u.username || u.email));
+        b.onclick = () => openDM(u);
+        dms.append(b);
+    });
+
+    const list = $('channel-list');
+    list.textContent = '';
+    if (!server) return;
+    if (!S.channels.length) list.append(h('div', 'side-empty', 'No text channels yet.'));
+    const cats = {};
+    S.channels.forEach(c => (cats[c.category || 'TEXT CHANNELS'] = cats[c.category || 'TEXT CHANNELS'] || []).push(c));
+    Object.entries(cats).forEach(([cat, chans]) => {
+        const t = h('div', 'sec-title');
+        t.append(h('span', '', cat));
+        if (isOwner()) {
+            const add = h('button', 'icon-btn'); add.innerHTML = ICON.plus; add.title = 'Create channel';
+            add.onclick = () => openChannelModal(cat);
+            t.append(add);
+        }
+        list.append(t);
+        chans.forEach(c => {
+            const it = h('div', 'ch-item' + (c.id === S.channelId ? ' active' : ''));
+            it.tabIndex = 0; it.setAttribute('role', 'button');
+            it.innerHTML = ICON.hash;
+            it.append(h('span', '', c.name));
+            if (isOwner()) {
+                const del = h('button', 'ch-del'); del.innerHTML = ICON.trash; del.title = 'Delete channel';
+                del.onclick = (e) => { e.stopPropagation(); deleteChannel(c); };
+                it.append(del);
+            }
+            it.onclick = () => selectChannel(c.id);
+            it.onkeydown = (e) => { if (e.key === 'Enter') selectChannel(c.id); };
+            list.append(it);
+        });
+    });
+}
+
+function renderFriends() {
+    $('friend-count').textContent = S.friends.length;
+    const grid = $('friend-grid');
+    grid.textContent = '';
+    if (!S.friends.length) { grid.style.display = 'block'; grid.append(h('div', 'empty-note', 'No friends yet — add someone above to start a conversation.')); return; }
+    grid.style.display = '';
+    S.friends.forEach(u => {
+        const c = h('div', 'friend-card');
+        const meta = h('div', 'meta');
+        meta.append(h('strong', '', u.username || u.email), h('small', '', u.email || ''));
+        const btn = h('button', 'btn ghost', 'Message');
+        btn.onclick = () => openDM(u);
+        c.append(avatar(u.username || u.email), meta, btn);
+        grid.append(c);
+    });
+}
+
+function renderMain() {
+    const home = S.view === 'home';
+    $('view-home').classList.toggle('hidden', !home);
+    $('view-chat').classList.toggle('hidden', home);
+    if (home) { renderFriends(); return; }
+    const isServer = S.view === 'server';
+    const ch = isServer ? curChannel() : null;
+    const icon = $('chat-icon');
+    icon.textContent = '';
+    if (isServer) {
+        icon.innerHTML = ICON.hash;
+        $('chat-name').textContent = ch ? ch.name : S.server.name;
+        $('chat-sub').textContent = ch ? S.server.name : '';
+    } else {
+        const n = S.dm.username || S.dm.email;
+        icon.append(avatar(n, 'sm'));
+        $('chat-name').textContent = n;
+        $('chat-sub').textContent = '';
+    }
+    $('invite-btn').classList.toggle('hidden', !isServer);
+    $('members-btn').classList.toggle('hidden', !isServer);
+    $('members-btn').classList.toggle('on', S.membersOn);
+    $('chat-body').classList.toggle('members-on', isServer && S.membersOn);
+
+    const none = isServer && S.chLoaded && !ch;
+    $('messages').classList.toggle('hidden', none);
+    $('composer-wrap').classList.toggle('hidden', isServer && !ch);
+    $('chat-empty').classList.toggle('hidden', !none);
+    if (none) renderEmpty();
+    $('chat-input').placeholder = isServer ? (ch ? `Message #${ch.name}` : '') : `Message @${S.dm.username || S.dm.email}`;
+}
+
+function renderEmpty() {
+    const box = $('chat-empty');
+    box.textContent = '';
+    const big = h('div', 'big'); big.innerHTML = ICON.hash;
+    box.append(big, h('h2', '', 'No text channels'));
+    if (isOwner()) {
+        box.append(h('p', '', 'This server has no text channels yet. Create one so people can start talking.'));
+        const b = h('button', 'btn primary', 'Create channel');
+        b.onclick = () => openChannelModal();
+        box.append(b);
+    } else {
+        box.append(h('p', '', 'The owner hasn\'t created a text channel yet. Messaging is disabled until they do.'));
+    }
+}
+
+function renderMembers() {
+    $('members-count').textContent = S.members.length;
+    const box = $('members-list');
+    box.textContent = '';
+    S.members.forEach(m => {
+        const r = h('div', 'mem');
+        r.append(avatar(m.username, 'sm'), h('span', '', m.username || 'Member'));
+        if (S.server && m.id === S.server.owner) r.append(h('em', 'badge', 'OWNER'));
+        box.append(r);
+    });
+}
+
+function renderMessages(list, force) {
+    const box = $('messages');
+    const sig = list.map(m => m.id).join(',');
+    if (sig === S.sig && !force) return;
+    const stick = force || box.scrollTop + box.clientHeight >= box.scrollHeight - 100;
+    box.textContent = '';
+
+    const start = h('div', 'msg-start');
+    const big = h('div', 'big');
+    if (S.view === 'server') {
+        big.innerHTML = ICON.hash;
+        const ch = curChannel();
+        start.append(big, h('h2', '', `Welcome to #${ch ? ch.name : ''}`), h('p', '', `This is the start of the #${ch ? ch.name : ''} channel.`));
+    } else {
+        const n = S.dm.username || S.dm.email;
+        big.innerHTML = ICON.chat;
+        start.append(big, h('h2', '', n), h('p', '', `This is the beginning of your conversation with ${n}.`));
+    }
+    box.append(start);
+
+    let prev = null, prevDay = '';
+    list.forEach(m => {
+        const day = new Date(m.t * 1000).toDateString();
+        if (day !== prevDay) { box.append(h('div', 'day-div', fmtDay(m.t))); prevDay = day; prev = null; }
+        const same = prev && prev.author.id === m.author.id && m.t - prev.t < 300;
+        const row = h('div', 'msg' + (same ? '' : ' first'));
+        const gutter = h('div', 'gutter');
+        if (same) gutter.textContent = fmtTime(m.t); else gutter.append(avatar(m.author.username));
+        const body = h('div', 'body');
+        if (!same) {
+            const head = h('div', 'head');
+            const name = h('strong', '', m.author.username);
+            name.style.color = color(m.author.username).replace('48%', '70%');
+            const time = h('time', '', fmtTime(m.t));
+            head.append(name, time);
+            body.append(head);
+        }
+        body.append(h('div', 'text', m.text));
+        row.append(gutter, body);
+        box.append(row);
+        prev = m;
+    });
+    S.sig = sig;
+    if (stick) box.scrollTop = box.scrollHeight;
+}
+
+/* ---------- composer ---------- */
+const input = $('chat-input');
+const autosize = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 160) + 'px'; };
+input.addEventListener('input', autosize);
+input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(); }
+});
+$('chat-form').onsubmit = (e) => { e.preventDefault(); sendMessage(); };
+
+async function sendMessage() {
+    const text = input.value.trim();
+    if (!text || S.sending) return;
+    const isServer = S.view === 'server';
+    if (isServer && S.channelId == null) return toast('This server has no text channel yet.', true);
+    S.sending = true; $('chat-send').disabled = true;
+    const out = await post({ action: 'send', kind: isServer ? 'server' : 'dm', id: isServer ? S.server.id : S.dm.id, text, ...(isServer ? { channelId: S.channelId } : {}) });
+    S.sending = false; $('chat-send').disabled = false;
+    if (out.res.ok) { input.value = ''; autosize(); await loadMessages(true); }
+    else toast(out.data.error || 'Message failed.', true);
+    input.focus();
+}
+
+/* ---------- friends ---------- */
+$('friend-add-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const out = await post({ action: 'friend-add', username: $('friend-add-input').value });
+    if (out.res.ok) { $('friend-add-input').value = ''; toast('Friend added!'); loadFriends(); }
+    else toast(out.data.error || 'Could not add friend.', true);
 };
-$('server-dialog-close').onclick = () => $('server-dialog').classList.add('hidden');
+
+/* ---------- modals ---------- */
+function openModal(id) { closeModals(); $(id).classList.remove('hidden'); const f = $(id).querySelector('input'); if (f) setTimeout(() => f.focus(), 30); }
+function closeModals() { document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden')); }
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModals);
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('mousedown', (e) => { if (e.target === m) closeModals(); }));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModals(); $('server-menu').classList.add('hidden'); closeNav(); } });
+
+$('server-create').onclick = () => openModal('modal-server');
+$('server-join-btn').onclick = () => openModal('modal-join');
+
 $('server-create-form').onsubmit = async (e) => {
     e.preventDefault();
     const out = await post({ action: 'server-create', name: $('server-name').value.trim() });
-    if (out.res.ok) {
-        $('server-dialog').classList.add('hidden');
-        $('server-name').value = '';
-        await loadServers();
-        await openServer(out.data.server);
-        notify('Server created!');
-    } else {
-        notify(out.data.error || 'Could not create server.');
+    if (!out.res.ok) return toast(out.data.error || 'Could not create server.', true);
+    closeModals(); $('server-name').value = '';
+    await loadServers();
+    openServer(out.data.server.id);
+    toast('Server created!');
+};
+
+function parseInvite(v) { const m = String(v).match(/[a-f0-9]{48}/i); return m ? m[0].toLowerCase() : ''; }
+async function joinWithCode(code) {
+    const out = await post({ action: 'server-join', code });
+    if (!out.res.ok) return toast(out.data.error || 'Invalid invite.', true);
+    closeModals();
+    await loadServers();
+    openServer(out.data.server.id);
+    toast(`Joined ${out.data.server.name}`);
+}
+$('server-join-form').onsubmit = (e) => {
+    e.preventDefault();
+    const code = parseInvite($('join-code').value);
+    if (!code) return toast('That doesn\'t look like a valid invite.', true);
+    $('join-code').value = '';
+    joinWithCode(code);
+};
+function handleInvite() {
+    const code = parseInvite(location.hash.startsWith('#invite=') ? location.hash : '');
+    if (!code) return;
+    history.replaceState(null, '', location.pathname);
+    joinWithCode(code);
+}
+
+function openChannelModal(cat) {
+    if (!isOwner()) return;
+    $('channel-modal-msg').textContent = '';
+    $('cat-options').textContent = '';
+    [...new Set(S.channels.map(c => c.category))].forEach(c => { const o = document.createElement('option'); o.value = c; $('cat-options').append(o); });
+    $('new-channel-cat').value = cat || 'TEXT CHANNELS';
+    $('new-channel-name').value = '';
+    openModal('modal-channel');
+}
+$('channel-create-form').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!S.server) return;
+    const out = await post({ action: 'channel-create', id: S.server.id, channelName: $('new-channel-name').value, category: $('new-channel-cat').value.trim() || 'TEXT CHANNELS' });
+    if (!out.res.ok) { $('channel-modal-msg').textContent = out.data.error || 'Could not create channel.'; return; }
+    closeModals();
+    await loadChannels();
+    S.channelId = out.data.channel.id; S.last[S.server.id] = S.channelId; S.sig = '';
+    renderAll(); loadMessages(true);
+    toast('Channel created.');
+};
+async function deleteChannel(c) {
+    if (!confirm(`Delete #${c.name}? All its messages will be removed.`)) return;
+    const out = await post({ action: 'channel-delete', channelId: c.id });
+    if (!out.res.ok) return toast(out.data.error || 'Could not delete channel.', true);
+    await loadChannels(c.id === S.channelId);
+    S.sig = ''; renderAll(); loadMessages(true);
+}
+
+async function openInvite() {
+    if (!S.server) return;
+    const out = await post({ action: 'server-invite', id: S.server.id });
+    if (!out.res.ok) return toast(out.data.error || 'Could not create invite.', true);
+    $('invite-link').value = `${location.origin}/#invite=${out.data.code}`;
+    openModal('modal-invite');
+    $('invite-link').select();
+}
+$('invite-btn').onclick = openInvite;
+$('invite-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText($('invite-link').value); toast('Invite link copied!'); }
+    catch { $('invite-link').select(); toast('Press Ctrl+C to copy.'); }
+};
+$('members-btn').onclick = () => { S.membersOn = !S.membersOn; renderMain(); };
+
+/* ---------- server menu ---------- */
+$('server-menu-btn').onclick = (e) => {
+    e.stopPropagation();
+    const menu = $('server-menu');
+    if (!menu.classList.contains('hidden')) return menu.classList.add('hidden');
+    $('menu-channel').classList.toggle('hidden', !isOwner());
+    $('menu-leave').classList.toggle('hidden', isOwner());
+    const r = $('server-menu-btn').getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(r.right - 220, window.innerWidth - 228)) + 'px';
+    menu.style.top = r.bottom + 6 + 'px';
+    menu.classList.remove('hidden');
+};
+document.addEventListener('click', () => $('server-menu').classList.add('hidden'));
+$('server-menu').onclick = async (e) => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    const act = b.dataset.act;
+    if (act === 'invite') openInvite();
+    if (act === 'channel') openChannelModal();
+    if (act === 'leave' && S.server && confirm(`Leave ${S.server.name}?`)) {
+        const out = await post({ action: 'server-leave', id: S.server.id });
+        if (!out.res.ok) return toast(out.data.error || 'Could not leave.', true);
+        await loadServers(); goHome(); toast('You left the server.');
     }
 };
 
-$('server-invite').onclick = async () => {
-    if (!chat || chat.kind !== 'server') return;
-    const out = await post({ action: 'server-invite', id: chat.id });
-    if (out.res.ok) {
-        $('server-invite-link').value = `${location.origin}/#invite=${out.data.code}`;
-        $('server-dialog-title').textContent = 'Invite Link';
-        $('server-create-form').classList.add('hidden');
-        $('server-invite-panel').classList.remove('hidden');
-        $('server-dialog').classList.remove('hidden');
-    } else {
-        notify(out.data.error || 'Only the owner can invite.');
-    }
-};
+window.addEventListener('hashchange', () => { if (S.token && S.me) handleInvite(); });
 
-$('server-invite-copy').onclick = async () => {
-    try { await navigator.clipboard.writeText($('server-invite-link').value); notify('Invite link copied!'); }
-    catch { $('server-invite-link').select(); notify('Press Ctrl+C to copy.'); }
-};
-
-$('dash-me-logout').onclick = logout;
-$('logout-btn').onclick = logout;
-
-if (token) showDash();
+/* ---------- start ---------- */
+setAuthMode(true);
+if (S.token) boot();
