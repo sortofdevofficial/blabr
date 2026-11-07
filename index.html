@@ -10,7 +10,13 @@
         * { box-sizing: border-box; }
         body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; color: #f2f2f4; background: radial-gradient(1200px 600px at 50% -10%, #1b1b22 0%, #0e0e11 60%); }
         .card { background: #17171b; padding: 26px; border-radius: 16px; width: 100%; max-width: 320px; flex: 0 0 auto; margin: auto 0; border: 1px solid #26262d; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
-        #dash { max-width: 380px; position: relative; }
+        #dash { display: flex; width: min(980px, calc(100vw - 32px)); height: min(760px, calc(100dvh - 32px)); max-width: none; padding: 0; overflow: hidden; position: relative; }
+        .dash-sidebar { flex: 0 0 248px; min-width: 0; display: flex; flex-direction: column; background: #141418; border-right: 1px solid #26262d; }
+        .dash-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+        .dash-home { flex: 1; min-width: 0; overflow-y: auto; padding: 20px; }
+        .dash-home .dash-head { padding-right: 0; }
+        .dash-home .brand.small { display: none; }
+        .dash-home h3:first-of-type { margin-top: 0; }
         img { -webkit-user-drag: none; user-select: none; }
         .brand { display: flex; justify-content: center; margin: 0 0 16px; }
         .brand img { width: 150px; height: 64px; object-fit: cover; object-position: 50% 31%; border-radius: 10px; display: block; }
@@ -224,7 +230,7 @@
         .msgr-title { min-width: 0; }
         .msgr-title h2 { margin: 0; padding: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f2f2f4; }
         .chat-status { display: flex; align-items: center; gap: 5px; margin: 2px 0 0; color: #8b8b96; font-size: 11.5px; }
-        .msgr-back { display: none; width: 30px; height: 30px; margin: 0; padding: 0; background: #24242b; color: #c9c9d4; font-size: 17px; border-radius: 8px; flex: 0 0 auto; }
+        .msgr-back { width: 30px; height: 30px; margin: 0; padding: 0; background: #24242b; color: #c9c9d4; font-size: 17px; border-radius: 8px; flex: 0 0 auto; }
         .msgr-back:hover { background: #2f2f38; color: #fff; }
         .msgr-thread { display: flex; flex-direction: column; flex: 1; min-height: 0; }
         .msgr-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #6b6b76; text-align: center; padding: 24px; }
@@ -263,20 +269,19 @@
         #chat-msg { margin: 6px 0 0; min-height: 15px; font-size: 12px; color: #ff6b6b; text-align: left; }
 
         @media (max-width: 640px) {
-            #chat.modal { padding: 0; align-items: stretch; justify-content: stretch; }
-            .msgr { width: 100%; height: 100%; max-width: none; border-radius: 0; }
-            .msgr-list { flex: 1 1 auto; border-right: none; }
-            .msgr-pane { display: none; }
-            #chat.open-thread .msgr-list { display: none; }
-            #chat.open-thread .msgr-pane { display: flex; }
-            .msgr-back { display: inline-flex; }
+            body { padding: 0; align-items: stretch; }
+            #dash { width: 100%; height: 100%; max-width: none; border-radius: 0; }
+            .dash-sidebar { flex: 1 1 auto; border-right: none; }
+            #dash-thread { display: none; }
+            #dash.open-thread .dash-sidebar { display: none; }
+            #dash.open-thread #dash-thread { display: flex; }
             .msgr-head { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(52px, env(safe-area-inset-right)); }
             .msgr-composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
             .chat-log { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
         }
 
         @media (max-width: 480px) {
-            .msgr-list { flex: 0 0 100%; }
+            .dash-sidebar { flex: 0 0 100%; }
             .msgr-list-head { padding: 12px 44px 8px 12px; }
             .msgr-head { min-height: 54px; padding: 9px 48px 9px 12px; }
             .mrow { padding: 1px 12px; }
@@ -310,8 +315,22 @@
         <p id="msg"></p>
     </div>
     <div class="card hidden" id="dash">
-        <div class="brand small"><img src="/logo.png" alt="pratr"></div>
-        <div class="dash-head">
+        <div class="dash-sidebar">
+            <div class="msgr-list-head"><strong>Messages</strong></div>
+            <div class="msgr-convos" id="dash-convos"></div>
+            <div class="msgr-me" id="dash-me">
+                <div class="fava" id="dash-me-ava"><span id="dash-me-initial">?</span></div>
+                <div class="msgr-me-info">
+                    <strong id="dash-me-name">@</strong>
+                    <span id="dash-me-status">Online</span>
+                </div>
+                <button type="button" id="dash-me-logout" title="Log out">⏻</button>
+            </div>
+        </div>
+        <div class="dash-main">
+            <div class="dash-home" id="dash-home">
+                <div class="brand small"><img src="/logo.png" alt="pratr"></div>
+                <div class="dash-head">
             <button type="button" class="avatar" id="avatar-btn" title="Change profile photo">
                 <img id="avatar-img" alt="Profile photo" class="hidden">
                 <span id="avatar-initial">?</span>
@@ -355,7 +374,6 @@
         <div id="sessions"></div>
         <div class="hrow">
             <h3>Friends</h3>
-            <button type="button" class="link" id="open-messenger">Messages</button>
         </div>
         <p class="fhint">Right-click a friend to open their profile or message them.</p>
         <div class="ftabs" role="tablist">
@@ -374,6 +392,26 @@
             </form>
         </div>
         <button type="button" id="logout-btn">Logout</button>
+            </div>
+            <div class="msgr-thread hidden" id="dash-thread">
+                <div class="msgr-head">
+                    <button type="button" class="msgr-back" id="dash-back" aria-label="Back">←</button>
+                    <div class="fava" id="chat-ava"><span id="chat-initial">?</span></div>
+                    <div class="msgr-title">
+                        <h2 id="chat-name">@</h2>
+                        <p class="chat-status"><i class="pdot-mini" id="chat-dot"></i><span id="chat-status">Offline</span></p>
+                    </div>
+                </div>
+                <div class="chat-log" id="chat-log"></div>
+                <div class="msgr-composer">
+                    <form id="chat-form">
+                        <input id="chat-input" maxlength="2000" placeholder="Message…" autocomplete="off">
+                        <button type="submit" id="chat-send">➤</button>
+                    </form>
+                    <p id="chat-msg"></p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="modal hidden" id="crop">
@@ -418,48 +456,6 @@
             <div class="modal-actions">
                 <button type="button" id="profile-message">Message</button>
                 <button type="button" class="danger-ghost" id="profile-remove">Remove friend</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal hidden" id="chat">
-        <div class="msgr">
-            <div class="msgr-list">
-                <div class="msgr-list-head"><strong>Messages</strong></div>
-                <button type="button" class="msgr-close" id="chat-close" aria-label="Close">×</button>
-                <div class="msgr-convos" id="chat-convos"></div>
-                <div class="msgr-me" id="chat-me">
-                    <div class="fava" id="chat-me-ava"><span id="chat-me-initial">?</span></div>
-                    <div class="msgr-me-info">
-                        <strong id="chat-me-name">@</strong>
-                        <span id="chat-me-status">Online</span>
-                    </div>
-                    <button type="button" id="chat-me-logout" title="Log out">⏻</button>
-                </div>
-            </div>
-            <div class="msgr-pane" id="chat-pane">
-                <div class="msgr-placeholder" id="chat-placeholder">
-                    <strong>Select a conversation</strong>
-                    <span>Choose a friend from the list to start messaging.</span>
-                </div>
-                <div class="msgr-thread hidden" id="chat-thread">
-                    <div class="msgr-head">
-                        <button type="button" class="msgr-back" id="chat-back" aria-label="Back">←</button>
-                        <div class="fava" id="chat-ava"><span id="chat-initial">?</span></div>
-                        <div class="msgr-title">
-                            <h2 id="chat-name">@</h2>
-                            <p class="chat-status"><i class="pdot-mini" id="chat-dot"></i><span id="chat-status">Offline</span></p>
-                        </div>
-                    </div>
-                    <div class="chat-log" id="chat-log"></div>
-                    <div class="msgr-composer">
-                        <form id="chat-form">
-                            <input id="chat-input" maxlength="2000" placeholder="Message…" autocomplete="off">
-                            <button type="submit" id="chat-send">➤</button>
-                        </form>
-                        <p id="chat-msg"></p>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -517,10 +513,12 @@
         function startPresence() {
             setMyStatus(myStatus, true);
             clearInterval(friendsTimer);
+            clearInterval(chatThreadsTimer);
             friendsTimer = setInterval(() => {
                 loadFriends(true);
-                if (messengerOpen) loadThreads(true);
+                loadThreads(true);
             }, SYNC_EVERY);
+            chatThreadsTimer = setInterval(() => loadThreads(true), THREADS_EVERY);
         }
 
         function loggedIn(token, email) {
@@ -688,9 +686,12 @@
             setIdent();
             setAvatar(null);
             setBio(localStorage.getItem('bio') || '');
+            setChatMe();
             loadSessions();
             loadFriends();
             startPresence();
+            renderConversations();
+            loadThreads(true);
         }
 
         function renderSessions(list) {
@@ -909,7 +910,7 @@
                     setChatHeader(chat.user);
                 }
             }
-            if (messengerOpen) renderConversations();
+            renderConversations();
             renderFriendTab();
         }
 
@@ -1168,7 +1169,6 @@
 
         const CHAT_EVERY = 10 * 1000;
         const THREADS_EVERY = 60 * 1000;
-        let messengerOpen = false;
         let chatThreads = [];
         let chatThreadsTimer = null;
         const chatLastSeen = {};
@@ -1409,7 +1409,7 @@
         }
 
         function renderConversations() {
-            const box = $('chat-convos');
+            const box = $('dash-convos');
             box.textContent = '';
             const byId = new Map(chatThreads.map((t) => [t.id, t]));
             const rank = { online: 0, dnd: 1, idle: 2, offline: 3 };
@@ -1463,7 +1463,6 @@
         }
 
         async function loadThreads(quiet) {
-            if (!messengerOpen) return;
             let out;
             try {
                 out = await post({ action: 'threads' }, localStorage.getItem('token'));
@@ -1476,11 +1475,6 @@
             renderConversations();
         }
 
-        function showThreadPane(show) {
-            $('chat-placeholder').classList.toggle('hidden', show);
-            $('chat-thread').classList.toggle('hidden', !show);
-        }
-
         function selectChat(u) {
             if (chat && chat.timer) clearInterval(chat.timer);
             chat = { id: u.id, user: u, timer: null };
@@ -1488,8 +1482,9 @@
             $('chat-log').textContent = '';
             $('chat-msg').textContent = '';
             $('chat-input').value = '';
-            showThreadPane(true);
-            $('chat').classList.add('open-thread');
+            $('dash-home').classList.add('hidden');
+            $('dash-thread').classList.remove('hidden');
+            $('dash').classList.add('open-thread');
             renderConversations();
             renderFriendTab();
             loadChat(true, true);
@@ -1500,8 +1495,9 @@
         function backToList() {
             if (chat && chat.timer) clearInterval(chat.timer);
             chat = null;
-            showThreadPane(false);
-            $('chat').classList.remove('open-thread');
+            $('dash-home').classList.remove('hidden');
+            $('dash-thread').classList.add('hidden');
+            $('dash').classList.remove('open-thread');
             renderConversations();
             renderFriendTab();
         }
@@ -1510,9 +1506,9 @@
             const email = localStorage.getItem('email') || '';
             const username = localStorage.getItem('username') || '';
             const status = myStatus || 'online';
-            $('chat-me-name').textContent = username ? '@' + username : (email || '@');
-            $('chat-me-status').textContent = PRESENCE_LABEL[status] || 'Online';
-            const ava = $('chat-me-ava');
+            $('dash-me-name').textContent = username ? '@' + username : (email || '@');
+            $('dash-me-status').textContent = PRESENCE_LABEL[status] || 'Online';
+            const ava = $('dash-me-ava');
             ava.textContent = '';
             const initial = document.createElement('span');
             initial.textContent = ((username || email)[0] || '?').toUpperCase();
@@ -1527,44 +1523,14 @@
             }
         }
 
-        function openMessenger() {
-            closeCtx();
-            $('profile').classList.add('hidden');
-            messengerOpen = true;
-            $('chat').classList.remove('hidden');
-            showThreadPane(false);
-            setChatMe();
-            renderConversations();
-            loadThreads(true);
-            if (!chatThreadsTimer) {
-                chatThreadsTimer = setInterval(() => loadThreads(true), THREADS_EVERY);
-            }
-        }
-
-        function closeMessenger() {
-            messengerOpen = false;
-            if (chat && chat.timer) clearInterval(chat.timer);
-            if (chatThreadsTimer) {
-                clearInterval(chatThreadsTimer);
-                chatThreadsTimer = null;
-            }
-            chat = null;
-            $('chat').classList.add('hidden');
-            $('chat').classList.remove('open-thread');
-            renderFriendTab();
-        }
-
         function openChat(u) {
             closeCtx();
             $('profile').classList.add('hidden');
-            if (!messengerOpen) openMessenger();
             selectChat(u);
         }
 
-        $('open-messenger').onclick = openMessenger;
-        $('chat-close').onclick = closeMessenger;
-        $('chat-back').onclick = backToList;
-        $('chat-me-logout').onclick = async () => {
+        $('dash-back').onclick = backToList;
+        $('dash-me-logout').onclick = async () => {
             const ok = await askConfirm({
                 title: 'Log out?',
                 text: 'This device will be signed out. You will need your email and password to log back in.',
@@ -1572,10 +1538,8 @@
                 danger: true
             });
             if (!ok) return;
-            closeMessenger();
             logout();
         };
-        $('chat').onclick = (e) => { if (e.target === $('chat')) closeMessenger(); };
 
         $('chat-form').onsubmit = async (e) => {
             e.preventDefault();
@@ -1768,7 +1732,7 @@
             if (!$('confirm').classList.contains('hidden')) return closeConfirm(false);
             if (!$('msg-ctx-menu').classList.contains('hidden')) return closeMsgCtx();
             if (!$('ctx-menu').classList.contains('hidden')) return closeCtx();
-            if (!$('chat').classList.contains('hidden')) return closeMessenger();
+            if ($('dash').classList.contains('open-thread')) return backToList();
             if (!$('profile').classList.contains('hidden')) return $('profile').classList.add('hidden');
             if (!$('crop').classList.contains('hidden')) return closeCrop();
             $('status-menu').classList.add('hidden');
