@@ -1385,7 +1385,9 @@
             renderChat(out.data, force);
             if (out.data.messages && out.data.messages.length) {
                 const max = Math.max(...out.data.messages.map((m) => m.t));
-                chatLastSeen[id] = Math.max(max, chatLastSeen[id] || 0);
+                const before = chatLastSeen[id] || 0;
+                chatLastSeen[id] = Math.max(max, before);
+                if (chatLastSeen[id] > before) renderConversations();
             }
         }
 
@@ -1485,6 +1487,9 @@
             $('dash-home').classList.add('hidden');
             $('dash-thread').classList.remove('hidden');
             $('dash').classList.add('open-thread');
+            if (u.thread) {
+                chatLastSeen[u.id] = Math.max(chatLastSeen[u.id] || 0, u.thread.t);
+            }
             renderConversations();
             renderFriendTab();
             loadChat(true, true);
