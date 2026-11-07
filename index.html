@@ -121,7 +121,8 @@
                         <p class="chat-status"><i class="pdot-mini" id="chat-dot"></i><span id="chat-status">Offline</span></p>
                     </div>
                     <div class="thread-actions hidden" id="server-actions">
-                        <button type="button" id="server-invite" class="hidden">Invite</button>
+                        <button type="button" id="server-members-btn" title="Server Members">👥 Members</button>
+                        <button type="button" id="server-invite" class="hidden" title="Invite Friends">🔗 Invite</button>
                     </div>
                 </div>
                 <div class="thread-container">
@@ -154,7 +155,7 @@
         </div>
     </div>
 
-    <!-- Modals -->
+    <!-- Modals & Context Menus -->
     <div class="modal hidden" id="channel-modal" role="dialog" aria-modal="true">
         <div class="modal-card">
             <button type="button" class="modal-close" id="channel-modal-close" aria-label="Close">×</button>
@@ -176,15 +177,24 @@
     <div class="modal hidden" id="server-dialog" role="dialog" aria-modal="true">
         <div class="modal-card">
             <button type="button" class="modal-close" id="server-dialog-close" aria-label="Close">×</button>
-            <h2 id="server-dialog-title">Create a server</h2>
+            <h2 id="server-dialog-title">Server Details</h2>
             <form id="server-create-form" class="hidden">
                 <p class="fhint">A little space for your group.</p>
                 <label for="server-name">Server name</label>
                 <input id="server-name" maxlength="60" placeholder="Your group name" autocomplete="off" required>
                 <button type="submit" id="server-create-submit">Create server</button>
             </form>
+            <div id="server-invite-panel" class="hidden">
+                <p class="fhint">Anyone with this invite link can join your server.</p>
+                <input id="server-invite-link" readonly>
+                <div class="modal-actions" style="margin-top:10px;">
+                    <button type="button" id="server-invite-copy">Copy link</button>
+                    <button type="button" class="ghost" id="server-invite-rotate">Replace link</button>
+                </div>
+            </div>
+            <div id="server-members-list" class="hidden" style="max-height:40vh; overflow-y:auto; margin-top:10px;"></div>
             <div id="server-discover-panel" class="hidden">
-                <div id="server-discover-list"></div>
+                <div id="server-discover-list" style="max-height:40vh; overflow-y:auto;"></div>
             </div>
             <p id="server-error" role="status"></p>
         </div>
@@ -221,6 +231,7 @@
     </div>
 
     <div class="toast-stack" id="toast-stack"></div>
+
     <div class="ctx-menu hidden" id="ctx-menu">
         <button type="button" data-ctx="profile">View profile</button>
         <button type="button" data-ctx="message">Message</button>
@@ -228,8 +239,11 @@
         <button type="button" data-ctx="remove" class="danger">Remove friend</button>
     </div>
 
-    <script src="/api.js"></script>
-    <script src="/auth-ui.js"></script>
-    <script src="/chat-ui.js"></script>
+    <div class="ctx-menu hidden" id="channel-ctx-menu">
+        <button type="button" id="ctx-create-channel">➕ Create Channel Here</button>
+        <button type="button" id="ctx-create-category">📁 New Category</button>
+    </div>
+
+    <script src="/app.js"></script>
 </body>
 </html>

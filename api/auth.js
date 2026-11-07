@@ -2,178 +2,87 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 
 mongoose.set('bufferCommands', false);
 
 const db = globalThis.__pratrDb || (globalThis.__pratrDb = { conn: null, promise: null });
-let mailer = null;
-
-const OTP_TTL_SECONDS = 600;
-const SESSION_TTL_SECONDS = 7 * 24 * 3600;
-const PRESENCE_TTL_SECONDS = 10 * 60;
 const nowSeconds = () => Math.floor(Date.now() / 1000);
-
-const STATUSES = ['online', 'idle', 'dnd'];
-
-function presenceOf(user) {
-  if (!user.o || nowSeconds() - user.o > PRESENCE_TTL_SECONDS) return 'offline';
-  return STATUSES[user.i || 0] || 'online';
-}
 
 async function connectDB() {
   if (db.conn) return db.conn;
   if (!db.promise) {
-    db.promise = mongoose
-      .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000, maxPoolSize: 1 })
-      .then(async (m) => {
-        await Promise.all([Server.createIndexes(), Msg.createIndexes(), Join.createIndexes(), Channel.createIndexes()]);
-        db.conn = m;
-        return m;
-      })
-      .catch((err) => { db.promise = null; throw err; });
+    db.promise = mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000, maxPoolSize: 1 })
+      .then(m => { db.conn = m; return m; })
+      .catch(err => { db.promise = null; throw err; });
   }
   return db.promise;
 }
 
 const userSchema = new mongoose.Schema({
-  _id: { type: Number, required: true },
-  e: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  p: { type: String, required: true },
-  n: { type: String, unique: true, sparse: true, trim: true },
-  c: { type: Number, default: nowSeconds },
+  _id: Number,
+  e: { type: String, unique: true, lowercase: true, trim: true },
+  p: String,
+  n: { type: String, unique: true, sparse: true },
   o: Number,
   i: Number,
   b: String,
   av: String
 }, { versionKey: false });
-
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 const pendingSchema = new mongoose.Schema({
-  _id: { type: String, lowercase: true, trim: true },
-  p: { type: String, required: true },
-  o: { type: String, required: true },
-  x: { type: Number, required: true },
-  a: { type: Number, default: 0 },
-  n: String
+  _id: String,
+  p: String,
+  o: String,
+  x: Number
 }, { versionKey: false });
-
 const Pending = mongoose.models.Pending || mongoose.model('Pending', pendingSchema, 'pending');
 
 const sessionSchema = new mongoose.Schema({
   _id: String,
-  u: { type: Number, index: true },
+  u: Number,
   i: String,
   d: String,
   s: Number
 }, { versionKey: false });
-
 const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
 
 const msgSchema = new mongoose.Schema({
-  _id: { type: Number, required: true },
-  a: { type: Number, required: true },
+  _id: Number,
+  a: Number,
   b: Number,
   s: Number,
-  ch: { type: String, default: null },
-  m: { type: String, required: true },
+  ch: Number,
+  m: String,
   t: { type: Number, default: nowSeconds },
   d: { type: Number, default: 0 }
 }, { versionKey: false });
-
 const Msg = mongoose.models.Msg || mongoose.model('Msg', msgSchema, 'msgs');
 
 const serverSchema = new mongoose.Schema({
-  _id: { type: Number, required: true },
-  n: { type: String, required: true, trim: true },
-  o: { type: Number, required: true },
-  m: { type: [Number], index: true },
-  i: { type: String, required: true, unique: true },
-  c: { type: Number, default: nowSeconds }
+  _id: Number,
+  n: String,
+  o: Number,
+  m: [Number],
+  i: { type: String, unique: true }
 }, { versionKey: false });
-
 const Server = mongoose.models.Server || mongoose.model('Server', serverSchema, 'servers');
 
 const channelSchema = new mongoose.Schema({
-  _id: { type: String, required: true },
-  s: { type: Number, required: true, index: true },
-  n: { type: String, required: true, trim: true },
-  cat: { type: String, trim: true, default: 'TEXT CHANNELS' },
-  c: { type: Number, default: nowSeconds }
+  _id: Number,
+  s: Number,
+  n: String,
+  cat: { type: String, default: 'TEXT CHANNELS' }
 }, { versionKey: false });
-
 const Channel = mongoose.models.Channel || mongoose.model('Channel', channelSchema, 'channels');
-
-const joinSchema = new mongoose.Schema({
-  s: { type: Number, required: true },
-  u: { type: Number, required: true },
-  t: { type: Number, default: nowSeconds },
-  duration: { type: Number, default: 0 },
-  lastActive: { type: Number, default: nowSeconds }
-}, { versionKey: false });
-
-joinSchema.index({ s: 1, u: 1 }, { unique: true });
-const Join = mongoose.models.Join || mongoose.model('Join', joinSchema, 'joins');
 
 const friendSchema = new mongoose.Schema({
   _id: String,
-  a: { type: Number, required: true },
-  b: { type: Number, required: true },
-  r: { type: Number, required: true },
-  s: { type: String, default: 'p' },
-  t: { type: Number, default: nowSeconds }
+  a: Number,
+  b: Number,
+  s: { type: String, default: 'p' }
 }, { versionKey: false });
-
 const Friend = mongoose.models.Friend || mongoose.model('Friend', friendSchema, 'friends');
-
-function clientIp(req) {
-  return (req.headers && (req.headers['x-forwarded-for'] || req.headers['x-real-ip'])) || 'unknown';
-}
-
-function deviceLabel(ua) {
-  return /Mobile/.test(ua) ? 'Mobile' : 'Desktop';
-}
-
-async function recordJoin(serverId, me) {
-  try {
-    await Join.updateOne(
-      { s: serverId, u: me },
-      { $setOnInsert: { t: nowSeconds(), duration: 0, lastActive: nowSeconds() } },
-      { upsert: true }
-    );
-  } catch (err) {
-    if (err.code !== 11000) console.error('[recordJoin]', err);
-  }
-}
-
-async function updateMemberActivity(userId) {
-  try {
-    const now = nowSeconds();
-    const joins = await Join.find({ u: userId }).lean();
-    for (const j of joins) {
-      const last = j.lastActive || j.t || now;
-      const diff = now - last;
-      if (diff > 0 && diff < 300) {
-        await Join.updateOne({ _id: j._id }, { $inc: { duration: diff }, $set: { lastActive: now } });
-      } else {
-        await Join.updateOne({ _id: j._id }, { $set: { lastActive: now } });
-      }
-    }
-  } catch (e) {}
-}
-
-function readAuth(req) {
-  const header = (req.headers && req.headers.authorization) || '';
-  if (!header.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
-  try { return jwt.verify(header.slice(7), process.env.JWT_SECRET); } catch { return null; }
-}
-
-async function requireLiveSession(req) {
-  const auth = readAuth(req);
-  if (!auth || !auth.sid) return null;
-  return auth;
-}
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -182,15 +91,14 @@ module.exports = async function handler(req, res) {
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch {} }
 
     await connectDB();
-    const { action, email, password, otp, id, username, status, bio, text, kind, name, channelId, category, channelName } = body;
+    const { action, email, password, otp, id, username, status, bio, text, kind, name, channelId, category, channelName, code } = body;
 
     if (action === 'register') {
       const key = String(email || '').trim().toLowerCase();
       if (!key || !password) return res.status(400).json({ error: 'Email and password required.' });
       if (await User.exists({ e: key })) return res.status(400).json({ error: 'Email already registered.' });
-      const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-      const p = await bcrypt.hash(password, 10);
-      await Pending.updateOne({ _id: key }, { p, o: await bcrypt.hash(code, 8), x: nowSeconds() + 600 }, { upsert: true });
+      const codeStr = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+      await Pending.updateOne({ _id: key }, { p: await bcrypt.hash(password, 10), o: await bcrypt.hash(codeStr, 8), x: nowSeconds() + 600 }, { upsert: true });
       return res.status(200).json({ message: 'Code sent.', email: key });
     }
 
@@ -203,7 +111,7 @@ module.exports = async function handler(req, res) {
       const user = await User.create({ _id: userId, e: key, p: pending.p, n: username || `user${userId}` });
       await Pending.deleteOne({ _id: key });
       const sid = crypto.randomBytes(12).toString('hex');
-      await Session.create({ _id: `${user._id}:${sid}`, u: user._id, i: clientIp(req), d: deviceLabel(req.headers['user-agent'] || ''), s: nowSeconds() });
+      await Session.create({ _id: `${user._id}:${sid}`, u: user._id, s: nowSeconds() });
       const token = jwt.sign({ userId: user._id, sid }, process.env.JWT_SECRET, { expiresIn: '7d' });
       return res.status(200).json({ token, email: user.e, id: user._id });
     }
@@ -213,158 +121,93 @@ module.exports = async function handler(req, res) {
       const user = await User.findOne({ e: key });
       if (!user || !(await bcrypt.compare(password, user.p))) return res.status(401).json({ error: 'Invalid credentials.' });
       const sid = crypto.randomBytes(12).toString('hex');
-      await Session.create({ _id: `${user._id}:${sid}`, u: user._id, i: clientIp(req), d: deviceLabel(req.headers['user-agent'] || ''), s: nowSeconds() });
+      await Session.create({ _id: `${user._id}:${sid}`, u: user._id, s: nowSeconds() });
       const token = jwt.sign({ userId: user._id, sid }, process.env.JWT_SECRET, { expiresIn: '7d' });
       return res.status(200).json({ token, email: user.e, id: user._id });
     }
 
-    const auth = await requireLiveSession(req);
+    const authHeader = (req.headers && req.headers.authorization) || '';
+    const auth = authHeader.startsWith('Bearer ') ? jwt.verify(authHeader.slice(7), process.env.JWT_SECRET) : null;
     if (!auth) return res.status(401).json({ error: 'Please log in again.' });
 
-    if (action === 'sessions') {
-      const user = await User.findById(auth.userId).lean();
-      if (!user) return res.status(401).json({ error: 'User not found.' });
-      const sessions = await Session.find({ u: auth.userId }).lean();
-      return res.status(200).json({
-        id: user._id,
-        email: user.e,
-        username: user.n,
-        bio: user.b || '',
-        status: STATUSES[user.i || 0],
-        avatar: user.av || null,
-        sessions: sessions.map(s => ({ id: s._id.split(':')[1], ip: s.i, device: s.d, last: s.s, current: s._id.endsWith(auth.sid) }))
-      });
-    }
-
-    if (action === 'ping') {
-      await updateMemberActivity(auth.userId);
-      return res.status(200).json({ ok: true });
-    }
-
     if (action === 'friends') {
-      await updateMemberActivity(auth.userId);
-      const docs = await Friend.find({ $or: [{ a: auth.userId }, { b: auth.userId }] }).lean();
-      const otherIds = docs.map(f => f.a === auth.userId ? f.b : f.a);
-      const users = otherIds.length ? await User.find({ _id: { $in: otherIds } }).select('e n av o i').lean() : [];
-      return res.status(200).json({
-        friends: users.map(u => ({ id: u._id, email: u.e, username: u.n, avatar: u.av, status: presenceOf(u) })),
-        incoming: [],
-        outgoing: []
-      });
+      const docs = await Friend.find({ $or: [{ a: auth.userId }, { b: auth.userId }], s: 'a' }).lean();
+      const users = await User.find({ _id: { $in: docs.map(f => f.a === auth.userId ? f.b : f.a) } }).select('e n av').lean();
+      return res.status(200).json({ friends: users.map(u => ({ id: u._id, email: u.e, username: u.n, avatar: u.av })) });
     }
 
     if (action === 'servers') {
       const servers = await Server.find({ m: auth.userId }).lean();
-      return res.status(200).json({ servers: servers.map(s => ({ id: s._id, name: s.n, owner: s.o, count: (s.m || []).length })) });
+      return res.status(200).json({ servers: servers.map(s => ({ id: s._id, name: s.n, owner: s.o, count: s.m.length })) });
     }
 
     if (action === 'server-create') {
-      const sName = String(name || '').trim();
-      if (!sName) return res.status(400).json({ error: 'Server name required.' });
       const last = await Server.findOne().sort({ _id: -1 }).select('_id').lean();
       const serverId = (last ? last._id : 0) + 1;
-      const server = await Server.create({
-        _id: serverId,
-        n: sName,
-        o: auth.userId,
-        m: [auth.userId],
-        i: crypto.randomBytes(24).toString('hex')
-      });
-      await Channel.create({ _id: `${serverId}:general`, s: serverId, n: 'general', cat: 'TEXT CHANNELS' }).catch(() => {});
-      await recordJoin(serverId, auth.userId);
+      const server = await Server.create({ _id: serverId, n: name, o: auth.userId, m: [auth.userId], i: crypto.randomBytes(24).toString('hex') });
+      await Channel.create({ _id: 1, s: serverId, n: 'general', cat: 'TEXT CHANNELS' });
       return res.status(200).json({ server: { id: server._id, name: server.n, owner: server.o, count: server.m.length } });
     }
 
     if (action === 'channels') {
-      const chans = await Channel.find({ s: Number(id) }).lean();
-      return res.status(200).json({
-        channels: chans.map(c => ({ id: c._id, name: c.n, category: c.cat || 'TEXT CHANNELS' }))
-      });
+      const chans = await Channel.find({ s: Number(id) }).sort({ _id: 1 }).lean();
+      return res.status(200).json({ channels: chans.map(c => ({ id: c._id, name: c.n, category: c.cat })) });
     }
 
     if (action === 'channel-create') {
+      const serverId = Number(id);
+      const lastCh = await Channel.findOne({ s: serverId }).sort({ _id: -1 }).select('_id').lean();
+      const chId = (lastCh ? lastCh._id : 0) + 1; // Channel ID starts at 1 per server!
       const chName = String(channelName || '').trim().toLowerCase().replace(/\s+/g, '-');
-      if (!chName) return res.status(400).json({ error: 'Channel name required.' });
-      const chId = `${id}:${chName}`;
-      await Channel.updateOne(
-        { _id: chId },
-        { $setOnInsert: { s: Number(id), n: chName, cat: category || 'TEXT CHANNELS', c: nowSeconds() } },
-        { upsert: true }
-      );
+      await Channel.create({ _id: chId, s: serverId, n: chName, cat: category || 'TEXT CHANNELS' });
       return res.status(200).json({ channel: { id: chId, name: chName, category: category || 'TEXT CHANNELS' } });
     }
 
-    if (action === 'server-members') {
-      const server = await Server.findById(Number(id)).lean();
-      if (!server) return res.status(404).json({ error: 'Server not found.' });
-      const members = await User.find({ _id: { $in: server.m || [] } }).select('n av o i').lean();
-      const joins = await Join.find({ s: server._id }).lean();
-      const byUser = new Map(joins.map(j => [j.u, j]));
-      return res.status(200).json({
-        server: { id: server._id, name: server.n, owner: server.o, count: server.m.length },
-        members: members.map(m => {
-          const j = byUser.get(m._id);
-          const activeDuration = presenceOf(m) !== 'offline' ? 10 : 0;
-          return {
-            id: m._id,
-            username: m.n,
-            avatar: m.av,
-            status: presenceOf(m),
-            duration: (j ? (j.duration || 0) : 0) + activeDuration
-          };
-        })
-      });
+    if (action === 'server-invite') {
+      const server = await Server.findOne({ _id: Number(id), o: auth.userId }).lean();
+      if (!server) return res.status(403).json({ error: 'Only owner can invite.' });
+      return res.status(200).json({ code: server.i });
+    }
+
+    if (action === 'invite-join') {
+      const server = await Server.findOne({ i: code }).lean();
+      if (!server) return res.status(404).json({ error: 'Invite not found.' });
+      await Server.updateOne({ _id: server._id }, { $addToSet: { m: auth.userId } });
+      return res.status(200).json({ server: { id: server._id, name: server.n, count: server.m.length } });
     }
 
     if (action === 'messages') {
       const isServer = kind === 'server';
-      const match = isServer ? { s: Number(id), ch: channelId || `${id}:general` } : { $or: [{ a: auth.userId, b: Number(id) }, { a: Number(id), b: auth.userId }] };
+      const match = isServer ? { s: Number(id), ch: channelId != null ? Number(channelId) : 1 } : { $or: [{ a: auth.userId, b: Number(id) }, { a: Number(id), b: auth.userId }] };
       const msgs = await Msg.find({ ...match, d: { $ne: 1 } }).sort({ t: -1 }).limit(50).lean();
       
       let server = null;
-      let targetUserObj = null;
       let members = [];
-
       if (isServer) {
         server = await Server.findById(Number(id)).lean();
-        if (server) {
-          members = await User.find({ _id: { $in: server.m || [] } }).select('n av o i').lean();
-        }
-      } else {
-        const otherId = Number(id);
-        const u = await User.findById(otherId).select('e n b av o i').lean();
-        if (u) targetUserObj = { id: u._id, email: u.e, username: u.n, avatar: u.av, status: presenceOf(u), bio: u.b || '' };
+        if (server) members = await User.find({ _id: { $in: server.m } }).select('n av').lean();
       }
-
-      const joins = server ? await Join.find({ s: server._id }).lean() : [];
-      const byUser = new Map(joins.map(j => [j.u, j]));
-
       return res.status(200).json({
-        ...(server ? {
-          server: { id: server._id, name: server.n, owner: server.o, count: server.m.length },
-          members: members.map(m => ({ id: m._id, username: m.n, avatar: m.av, status: presenceOf(m), duration: (byUser.get(m._id)?.duration || 0) }))
-        } : {
-          user: targetUserObj
-        }),
-        messages: msgs.reverse().map(m => ({ id: m._id, mine: m.a === auth.userId, text: m.m, t: m.t, sender: { id: m.a, username: 'Member' }, mentions: [] }))
+        ...(server ? { server: { id: server._id, name: server.n, count: server.m.length }, members: members.map(m => ({ id: m._id, username: m.n })) } : {}),
+        messages: msgs.reverse().map(m => ({ id: m._id, mine: m.a === auth.userId, text: m.m, t: m.t }))
       });
     }
 
     if (action === 'send') {
       const last = await Msg.findOne().sort({ _id: -1 }).select('_id').lean();
+      const msgId = (last ? last._id : 0) + 1;
       const msg = await Msg.create({
-        _id: (last ? last._id : 0) + 1,
+        _id: msgId,
         a: auth.userId,
-        ...(kind === 'server' ? { s: Number(id), ch: channelId || `${id}:general` } : { b: Number(id) }),
-        m: text,
-        t: nowSeconds()
+        ...(kind === 'server' ? { s: Number(id), ch: channelId != null ? Number(channelId) : 1 } : { b: Number(id) }),
+        m: text
       });
-      return res.status(200).json({ message: { id: msg._id, mine: true, text: msg.m, t: msg.t } });
+      return res.status(200).json({ message: { id: msg._id, mine: true, text: msg.m } });
     }
 
     return res.status(400).json({ error: 'Invalid action.' });
   } catch (err) {
-    console.error('[auth endpoint error]', err);
-    return res.status(500).json({ error: err.message || 'Internal server error.' });
+    console.error('[auth error]', err);
+    return res.status(500).json({ error: err.message || 'Server error.' });
   }
 };
