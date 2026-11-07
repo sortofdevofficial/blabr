@@ -89,3 +89,18 @@ button:hover { background: #5457e5; }
 #chat-send { width: 34px; height: 34px; border-radius: 10px; font-size: 16px; margin: 0; display: flex; align-items: center; justify-content: center; }
 
 .fava { position: relative; width: 32px; height: 32px; border-radius: 50%; background: #6366f1; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+/* fixes */
+.msgr-me button, #dash-me-logout { width: 32px; height: 32px; padding: 0; margin: 0; background: #24242b; color: #c9c9d4; }
+label { font-size: 12px; color: #8b8b96; }
+.mrow.mine { align-self: flex-end; background: #2d2f6b; max-width: 75%; }
+.mrow.theirs { align-self: flex-start; background: #1f1f26; max-width: 75%; }
+.mrow small { display: block; color: #8b8b96; font-size: 11px; }
+#friend-add-form { display: flex; gap: 8px; }
+#friend-add-form button { width: auto; }
+#logout-btn { max-width: 200px; margin-top: 20px; }
+@media (max-width: 700px) {
+  .dash-sidebar { flex-basis: 180px; width: 180px; }
+  .channels-pane { flex-basis: 140px; width: 140px; }
+  .members-sidebar { display: none; }
+  .members-sidebar.show { display: flex; position: absolute; right: 0; top: 0; bottom: 0; z-index: 5; }
+}
