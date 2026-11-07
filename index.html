@@ -207,7 +207,16 @@
         .conv-info span { display: block; margin-top: 2px; color: #8b8b96; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .conv-info span.mine::before { content: 'You: '; color: #6b6b76; }
         .conv time { flex: 0 0 auto; align-self: flex-start; margin-top: 3px; color: #6b6b76; font-size: 10px; }
+        .conv-badge { flex: 0 0 auto; align-self: flex-start; min-width: 18px; height: 18px; margin-top: 2px; padding: 0 5px; background: #da373c; color: #fff; font-size: 10px; font-weight: 700; line-height: 18px; text-align: center; border-radius: 999px; }
         .conv-empty { padding: 18px 12px; color: #6b6b76; font-size: 12px; text-align: center; line-height: 1.5; }
+
+        .msgr-me { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #141418; border-top: 1px solid #26262d; }
+        .msgr-me .fava { width: 34px; height: 34px; font-size: 13px; }
+        .msgr-me-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .msgr-me-info strong { font-size: 13px; font-weight: 600; color: #f2f2f4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .msgr-me-info span { font-size: 11px; color: #8b8b96; }
+        .msgr-me button { width: auto; margin: 0; padding: 6px; background: #24242b; color: #c9c9d4; border-radius: 8px; font-size: 14px; line-height: 1; }
+        .msgr-me button:hover { background: #2f2f38; color: #fff; }
 
         .msgr-pane { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: #17171b; }
         .msgr-head { display: flex; align-items: center; gap: 10px; padding: 11px 52px 11px 14px; border-bottom: 1px solid #26262d; min-height: 60px; }
@@ -222,23 +231,23 @@
         .msgr-placeholder strong { color: #c9c9d4; font-size: 14px; }
         .msgr-placeholder span { font-size: 12px; line-height: 1.5; }
 
-        .chat-log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 8px 0; }
-        .daysep { align-self: center; margin: 16px 0 8px; padding: 2px 9px; background: #202027; color: #6b6b76; font-size: 10.5px; font-weight: 600; border-radius: 8px; }
-        .mrow { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 2px 14px; }
-        .mrow:hover { background: rgba(255, 255, 255, .03); }
-        .mrow.grp { margin-top: 16px; }
-        .mrow .fava { width: 36px; height: 36px; font-size: 13px; margin-top: 2px; flex: 0 0 auto; }
+        .chat-log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 12px 0; }
+        .daysep { align-self: center; margin: 18px 0 12px; padding: 2px 10px; background: #202027; color: #6b6b76; font-size: 10.5px; font-weight: 600; border-radius: 8px; }
+        .mrow { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 1px 14px; margin: 1px 0; }
+        .mrow:hover { background: rgba(255, 255, 255, .025); }
+        .mrow.grp { margin-top: 18px; }
+        .mrow .fava { width: 38px; height: 38px; font-size: 14px; margin-top: 2px; flex: 0 0 auto; }
         .mrow .fava.ghost { visibility: hidden; }
         .mbody { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-right: 80px; }
         .mrow.mine .mbody { padding-right: 0; padding-left: 80px; align-items: flex-end; }
-        .meta { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; }
+        .meta { display: flex; align-items: baseline; gap: 6px; margin: 0 0 3px; }
         .meta strong { font-size: 14px; font-weight: 500; color: #f2f2f4; }
         .meta time { font-size: 11px; color: #6b6b76; cursor: default; }
-        .bub { padding: 2px 0; color: #dbdbe0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-        .mrow.mine .bub { color: #f2f2f4; }
+        .bub { width: fit-content; max-width: 100%; padding: 7px 12px; background: #24242b; border-radius: 4px 12px 12px 12px; color: #dbdbe0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; box-shadow: 0 1px 2px rgba(0, 0, 0, .15); }
+        .mrow.mine .bub { background: #4f46a3; color: #f2f2f4; border-radius: 12px 4px 12px 12px; }
         .chat-empty { margin: auto; color: #6b6b76; font-size: 12.5px; text-align: center; padding: 18px 0; }
 
-        .mtools { position: absolute; top: -10px; right: 14px; display: flex; gap: 2px; padding: 2px; background: #1f1f25; border: 1px solid #2b2b33; border-radius: 6px; box-shadow: 0 6px 16px rgba(0, 0, 0, .4); opacity: 0; pointer-events: none; transition: opacity .1s; z-index: 5; }
+        .mtools { position: absolute; top: -8px; right: 14px; display: flex; gap: 2px; padding: 2px; background: #1f1f25; border: 1px solid #2b2b33; border-radius: 6px; box-shadow: 0 6px 16px rgba(0, 0, 0, .4); opacity: 0; pointer-events: none; transition: opacity .1s; z-index: 5; }
         .mrow:hover .mtools { opacity: 1; pointer-events: auto; }
         .mtools button { width: auto; margin: 0; padding: 4px 8px; background: none; color: #c9c9d4; font-size: 12px; font-weight: 500; border-radius: 4px; }
         .mtools button:hover { background: #2a2a32; color: #fff; }
@@ -258,8 +267,8 @@
             .msgr { width: 100%; height: 100%; max-width: none; border-radius: 0; }
             .msgr-list { flex: 1 1 auto; border-right: none; }
             .msgr-pane { display: none; }
-            .msgr.open-thread .msgr-list { display: none; }
-            .msgr.open-thread .msgr-pane { display: flex; }
+            #chat.open-thread .msgr-list { display: none; }
+            #chat.open-thread .msgr-pane { display: flex; }
             .msgr-back { display: inline-flex; }
             .msgr-head { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(52px, env(safe-area-inset-right)); }
             .msgr-composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
@@ -270,11 +279,11 @@
             .msgr-list { flex: 0 0 100%; }
             .msgr-list-head { padding: 12px 44px 8px 12px; }
             .msgr-head { min-height: 54px; padding: 9px 48px 9px 12px; }
-            .mrow { padding: 2px 12px; }
-            .mrow .fava { width: 32px; height: 32px; font-size: 12px; }
-            .mbody { padding-right: 72px; }
-            .mrow.mine .mbody { padding-left: 72px; }
-            .bub { font-size: 13px; }
+            .mrow { padding: 1px 12px; }
+            .mrow .fava { width: 34px; height: 34px; font-size: 12px; }
+            .mbody { padding-right: 68px; }
+            .mrow.mine .mbody { padding-left: 68px; }
+            .bub { font-size: 13.5px; padding: 6px 10px; }
             .meta strong { font-size: 13px; }
             .conv { padding: 7px 10px; }
             .conv .fava { width: 34px; height: 34px; }
@@ -419,6 +428,14 @@
                 <div class="msgr-list-head"><strong>Messages</strong></div>
                 <button type="button" class="msgr-close" id="chat-close" aria-label="Close">×</button>
                 <div class="msgr-convos" id="chat-convos"></div>
+                <div class="msgr-me" id="chat-me">
+                    <div class="fava" id="chat-me-ava"><span id="chat-me-initial">?</span></div>
+                    <div class="msgr-me-info">
+                        <strong id="chat-me-name">@</strong>
+                        <span id="chat-me-status">Online</span>
+                    </div>
+                    <button type="button" id="chat-me-logout" title="Log out">⏻</button>
+                </div>
             </div>
             <div class="msgr-pane" id="chat-pane">
                 <div class="msgr-placeholder" id="chat-placeholder">
@@ -745,6 +762,8 @@
                 localStorage.setItem('bio', out.data.bio);
                 setBio(out.data.bio);
             }
+            if (out.data.avatar) localStorage.setItem('avatar', out.data.avatar);
+            else localStorage.removeItem('avatar');
             setAvatar(out.data.avatar);
             renderSessions(out.data.sessions);
         }
@@ -1152,6 +1171,7 @@
         let messengerOpen = false;
         let chatThreads = [];
         let chatThreadsTimer = null;
+        const chatLastSeen = {};
 
         function fmtTime(t) {
             return new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -1233,6 +1253,8 @@
             bub.className = 'bub';
             bub.textContent = m.text;
             body.append(bub);
+
+            row.append(body);
 
             const tools = document.createElement('div');
             tools.className = 'mtools';
@@ -1361,6 +1383,10 @@
             }
             $('chat-msg').textContent = '';
             renderChat(out.data, force);
+            if (out.data.messages && out.data.messages.length) {
+                const max = Math.max(...out.data.messages.map((m) => m.t));
+                chatLastSeen[id] = Math.max(max, chatLastSeen[id] || 0);
+            }
         }
 
         function convAvatar(u) {
@@ -1423,6 +1449,14 @@
                 const when = document.createElement('time');
                 when.textContent = u.thread ? ago(u.thread.t) : '';
                 btn.append(when);
+                const unread = u.thread && !u.thread.mine && u.thread.t > (chatLastSeen[u.id] || 0) && !(chat && chat.id === u.id);
+                if (unread) {
+                    const badge = document.createElement('span');
+                    badge.className = 'conv-badge';
+                    badge.textContent = '1';
+                    badge.title = 'New message';
+                    btn.append(badge);
+                }
                 btn.onclick = () => selectChat(u);
                 box.append(btn);
             });
@@ -1472,12 +1506,34 @@
             renderFriendTab();
         }
 
+        function setChatMe() {
+            const email = localStorage.getItem('email') || '';
+            const username = localStorage.getItem('username') || '';
+            const status = myStatus || 'online';
+            $('chat-me-name').textContent = username ? '@' + username : (email || '@');
+            $('chat-me-status').textContent = PRESENCE_LABEL[status] || 'Online';
+            const ava = $('chat-me-ava');
+            ava.textContent = '';
+            const initial = document.createElement('span');
+            initial.textContent = ((username || email)[0] || '?').toUpperCase();
+            ava.append(initial);
+            const url = localStorage.getItem('avatar');
+            if (url) {
+                const img = document.createElement('img');
+                img.alt = '';
+                img.onerror = () => img.remove();
+                img.src = url;
+                ava.append(img);
+            }
+        }
+
         function openMessenger() {
             closeCtx();
             $('profile').classList.add('hidden');
             messengerOpen = true;
             $('chat').classList.remove('hidden');
             showThreadPane(false);
+            setChatMe();
             renderConversations();
             loadThreads(true);
             if (!chatThreadsTimer) {
@@ -1508,6 +1564,17 @@
         $('open-messenger').onclick = openMessenger;
         $('chat-close').onclick = closeMessenger;
         $('chat-back').onclick = backToList;
+        $('chat-me-logout').onclick = async () => {
+            const ok = await askConfirm({
+                title: 'Log out?',
+                text: 'This device will be signed out. You will need your email and password to log back in.',
+                ok: 'Log out',
+                danger: true
+            });
+            if (!ok) return;
+            closeMessenger();
+            logout();
+        };
         $('chat').onclick = (e) => { if (e.target === $('chat')) closeMessenger(); };
 
         $('chat-form').onsubmit = async (e) => {
