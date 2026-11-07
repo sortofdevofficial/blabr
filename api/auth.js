@@ -163,6 +163,14 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ id: me._id, email: me.e, username: me.n });
     }
 
+    if (action === 'profile-update') {
+      const uname = String(username || '').trim().slice(0, 20);
+      if (!uname) return res.status(400).json({ error: 'Username required.' });
+      if (await User.exists({ n: uname, _id: { $ne: auth.userId } })) return res.status(400).json({ error: 'Username taken.' });
+      await User.updateOne({ _id: auth.userId }, { n: uname });
+      return res.status(200).json({ username: uname });
+    }
+
     if (action === 'friend-add') {
       const q = String(username || '').trim();
       const other = await User.findOne({ $or: [{ n: q }, { e: q.toLowerCase() }] }).lean();

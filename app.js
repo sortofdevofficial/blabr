@@ -275,6 +275,7 @@ function renderSide() {
         const b = h('button', 'dm-item' + (S.view === 'dm' && S.dm && S.dm.id === u.id ? ' active' : ''));
         b.append(avatar(u.username || u.email, 'sm'), h('span', '', u.username || u.email));
         b.onclick = () => openDM(u);
+        b._ctx = userItems(u);
         dms.append(b);
     });
 
@@ -303,6 +304,7 @@ function renderSide() {
                 del.onclick = (e) => { e.stopPropagation(); deleteChannel(c); };
                 it.append(del);
             }
+            it._ctx = [['Open channel', () => selectChannel(c.id)], ['Copy name', () => copy(c.name)], ...(isOwner() ? ['-', ['Delete channel', () => deleteChannel(c), true]] : [])];
             it.onclick = () => selectChannel(c.id);
             it.onkeydown = (e) => { if (e.key === 'Enter') selectChannel(c.id); };
             list.append(it);
@@ -322,6 +324,7 @@ function renderFriends() {
         meta.append(h('strong', '', u.username || u.email), h('small', '', u.email || ''));
         const btn = h('button', 'btn ghost', 'Message');
         btn.onclick = () => openDM(u);
+        c._ctx = userItems(u);
         c.append(avatar(u.username || u.email), meta, btn);
         grid.append(c);
     });
@@ -380,6 +383,7 @@ function renderMembers() {
     box.textContent = '';
     S.members.forEach(m => {
         const r = h('div', 'mem');
+        r._ctx = userItems(m);
         r.append(avatar(m.username, 'sm'), h('span', '', m.username || 'Member'));
         if (S.server && m.id === S.server.owner) r.append(h('em', 'badge', 'OWNER'));
         box.append(r);
@@ -424,6 +428,7 @@ function renderMessages(list, force) {
             body.append(head);
         }
         body.append(h('div', 'text', m.text));
+        row._ctx = [...userItems(m.author), ['Copy message', () => copy(m.text)]];
         row.append(gutter, body);
         box.append(row);
         prev = m;
@@ -455,11 +460,15 @@ async function sendMessage() {
 }
 
 /* ---------- friends ---------- */
+async function addFriend(q) {
+    const out = await post({ action: 'friend-add', username: q });
+    if (out.res.ok) { toast('Friend added!'); loadFriends(); }
+    else toast(out.data.error || 'Could not add friend.', true);
+    return out.res.ok;
+}
 $('friend-add-form').onsubmit = async (e) => {
     e.preventDefault();
-    const out = await post({ action: 'friend-add', username: $('friend-add-input').value });
-    if (out.res.ok) { $('friend-add-input').value = ''; toast('Friend added!'); loadFriends(); }
-    else toast(out.data.error || 'Could not add friend.', true);
+    if (await addFriend($('friend-add-input').value)) $('friend-add-input').value = '';
 };
 
 /* ---------- modals ---------- */
@@ -575,6 +584,83 @@ $('server-menu').onclick = async (e) => {
 };
 
 window.addEventListener('hashchange', () => { if (S.token && S.me) handleInvite(); });
+
+/* ---------- profile ---------- */
+function openProfile() {
+    $('profile-msg').textContent = '';
+    $('profile-name').value = S.me ? S.me.username : '';
+    openModal('modal-profile');
+}
+$('profile-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const out = await post({ action: 'profile-update', username: $('profile-name').value });
+    if (!out.res.ok) { $('profile-msg').textContent = out.data.error || 'Could not save.'; return; }
+    S.me.username = out.data.username; setMe(S.me);
+    closeModals(); toast('Profile updated.');
+    loadMessages(true); loadMembers();
+};
+
+/* ---------- context menu (replaces the browser's) ---------- */
+const ctx = $('ctx-menu');
+const copy = (t) => navigator.clipboard.writeText(t).then(() => toast('Copied.'), () => toast('Copy failed.', true));
+function userItems(u) {
+    if (!u || (S.me && u.id === S.me.id)) return [];
+    const f = S.friends.find(x => x.id === u.id);
+    return [f ? ['Message', () => openDM(f)] : ['Add friend', () => addFriend(u.username || u.email)], ['Copy username', () => copy(u.username || u.email)]];
+}
+document.querySelector('.user-panel')._ctx = () => [['Edit profile', openProfile], ['Copy username', () => copy(S.me.username)], '-', ['Log out', () => $('logout-btn').click(), true]];
+
+document.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    let items = null;
+    for (let n = e.target; n && !items; n = n.parentElement) if (n._ctx) items = typeof n._ctx === 'function' ? n._ctx() : n._ctx;
+    if (!items || !items.length || $('app').classList.contains('hidden')) return ctx.classList.add('hidden');
+    ctx.textContent = '';
+    items.forEach(it => {
+        if (it === '-') return ctx.append(document.createElement('hr'));
+        const b = h('button', it[2] ? 'danger' : '', it[0]);
+        b.onclick = it[1];
+        ctx.append(b);
+    });
+    ctx.classList.remove('hidden');
+    ctx.style.left = Math.min(e.clientX, innerWidth - 228) + 'px';
+    ctx.style.top = Math.min(e.clientY, innerHeight - ctx.offsetHeight - 8) + 'px';
+});
+document.addEventListener('click', () => ctx.classList.add('hidden'));
+['scroll', 'resize', 'blur'].forEach(ev => addEventListener(ev, () => ctx.classList.add('hidden'), true));
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') ctx.classList.add('hidden');
+    const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+    if (e.key === 'F12' || (mod && ((e.shiftKey || e.altKey) && 'ijc'.includes(k) || k === 'u'))) e.preventDefault();
+}, true);
+
+/* ---------- login background: gravity dots ---------- */
+(() => {
+    const cv = $('gravity'), c = cv.getContext('2d'), m = { x: -999, y: -999 }, R = 170, GAP = 32;
+    let dots = [], w, ht, dpr;
+    const seed = () => {
+        dpr = devicePixelRatio || 1; w = innerWidth; ht = innerHeight;
+        cv.width = w * dpr; cv.height = ht * dpr; c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        dots = [];
+        for (let x = GAP / 2; x < w; x += GAP) for (let y = GAP / 2; y < ht; y += GAP) dots.push({ hx: x, hy: y, x, y, vx: 0, vy: 0 });
+    };
+    addEventListener('resize', seed); seed();
+    addEventListener('pointermove', (e) => { m.x = e.clientX; m.y = e.clientY; });
+    document.addEventListener('pointerleave', () => { m.x = m.y = -999; });
+    (function tick() {
+        requestAnimationFrame(tick);
+        if ($('auth-screen').classList.contains('hidden')) return;
+        c.clearRect(0, 0, w, ht);
+        for (const d of dots) {
+            const dx = m.x - d.x, dy = m.y - d.y, dist = Math.hypot(dx, dy) || 1, near = Math.max(0, 1 - dist / R);
+            d.vx += near * near * 2.2 * dx / dist + (d.hx - d.x) * 0.04;
+            d.vy += near * near * 2.2 * dy / dist + (d.hy - d.y) * 0.04;
+            d.vx *= 0.84; d.vy *= 0.84; d.x += d.vx; d.y += d.vy;
+            c.fillStyle = `rgba(239,232,218,${0.18 + near * 0.7})`;
+            c.beginPath(); c.arc(d.x, d.y, 1.2 + near * 1.6, 0, 6.283); c.fill();
+        }
+    })();
+})();
 
 /* ---------- start ---------- */
 setAuthMode(true);
